@@ -18,23 +18,29 @@
     --bg-surface-raised: 40 100% 99%;   /* #FFFEFC — modals/popovers */
     --bg-sunken: 38 30% 92%;            /* #F2EEE7 — inputs/insets */
 
-    /* Text hierarchy (soft charcoal, never pure black) */
-    --text-primary: 240 9% 11%;         /* #1A1A1F */
-    --text-secondary: 240 6% 38%;       /* #5C5C66 */
-    --text-tertiary: 240 6% 58%;        /* #8E8E99 */
-    --text-disabled: 240 11% 78%;       /* #C4C4CC */
+    /* Text hierarchy — warm walnut per vision (#2A1F1A), never pure black */
+    --text-primary: 22 23% 13%;         /* #2A1F1A warm dark walnut */
+    --text-secondary: 30 12% 35%;       /* #5C5048 */
+    --text-tertiary: 30 9% 55%;         /* #8B807A */
+    --text-disabled: 30 14% 78%;        /* #C9BFB8 */
 
     /* Borders / dividers — alpha-driven so they sit on canvas */
     --border-subtle: 26 8% 12% / 0.08;
     --border-default: 26 8% 12% / 0.12;
     --border-strong: 26 8% 12% / 0.20;
 
-    /* Action accent — distinctive deep teal, exclusive to next-action */
-    --action-primary: 180 47% 33%;      /* #2D7D7D */
-    --action-primary-hover: 180 49% 27%;
-    --action-primary-pressed: 180 50% 22%;
+    /* Action accent — burnt sienna per GoneSquirrel vision, exclusive to next-action */
+    --action-primary: 17 90% 41%;       /* #C2410C burnt sienna */
+    --action-primary-hover: 17 90% 33%; /* #9A330A */
+    --action-primary-pressed: 17 90% 26%; /* #7E2A08 */
     --action-secondary: 38 21% 89%;     /* #E8E4DD */
     --action-on-accent: 0 0% 100%;
+
+    /* GoneSquirrel woodsy energy/state palette */
+    --accent-forest: 142 70% 29%;       /* #15803D — deep work, "found it" */
+    --accent-honey: 32 92% 44%;         /* #D97706 — energy, urgency */
+    --accent-moss: 78 81% 35%;          /* #65A30D — light work, success */
+    --accent-acorn: 22 84% 31%;         /* #92400E — caution, never alarm */
 
     /* Urgency spectrum — temperature, not alarms */
     --urgency-calm: 240 6% 58%;         /* #8E8E99 */
@@ -113,12 +119,18 @@
     --border-default: 40 22% 92% / 0.12;
     --border-strong: 40 22% 92% / 0.20;
 
-    /* Action accent lifts slightly in dark for contrast on graphite */
-    --action-primary: 180 45% 40%;
-    --action-primary-hover: 180 47% 47%;
-    --action-primary-pressed: 180 50% 33%;
+    /* Action accent — sienna lifts slightly in dark for graphite contrast */
+    --action-primary: 17 80% 52%;       /* lifted sienna */
+    --action-primary-hover: 17 80% 58%;
+    --action-primary-pressed: 17 85% 44%;
     --action-secondary: 240 7% 22%;
     --action-on-accent: 240 7% 9%;
+
+    /* Woodsy palette — dark variants */
+    --accent-forest: 142 55% 45%;
+    --accent-honey: 32 85% 56%;
+    --accent-moss: 78 65% 50%;
+    --accent-acorn: 22 70% 48%;
 
     /* Urgency lifts in dark */
     --urgency-calm: 240 6% 50%;

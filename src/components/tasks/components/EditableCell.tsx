@@ -521,7 +521,7 @@ const formatContextualDate = (date: Date) => {
     text = format(localDate, "MMM d, yyyy");
   }
   if (isOverdue) {
-    text = `Overdue: ${text}`;
+    text = `Slipped · ${text}`;
   }
   return { text, isOverdue, isFuture };
 };

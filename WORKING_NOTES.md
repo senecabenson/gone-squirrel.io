@@ -161,3 +161,42 @@ in 4 days.
 - **Working:** Periodic GCal autoSync confirmed firing end-to-end from any page. Phase 1 truly complete.
 - **Broken:** localStorage hydration race on direct hash nav (workaround: visit `/settings` first). Jest OOM unchanged.
 - **Next concrete task:** Phase 3 Day 0 (still pending) — pick phone-access option, start FRICTIONS journal. Day 14 = 2026-05-17 (recompute from today's actual Day 0 if delayed).
+
+---
+
+## 2026-05-05 — GoneSquirrel rebrand + redesign + push
+
+- **Phase:** Rebrand → public repo
+- **Did today:**
+  - **Full UI redesign across all surfaces** (Phases A–G of the GoneSquirrel design plan, see `can-we-use-the-golden-fern.md`):
+    - Foundation: semantic CSS-var token system in `src/app/globals.css` (foundation/domain/signal/action families). Fraunces variable serif + Plus Jakarta Sans + JetBrains Mono via `next/font/google`. Motion primitives (`src/lib/motion.ts`) + paper-grain SVG (`public/textures/grain.svg`) + reduce-motion + manual toggle.
+    - Settings store extended (`src/store/settings.ts`): `motionEnabled`, `iconLabelsHidden`, `themeMode`, `colorMode`, `contrast`, `timeOfDayShift`, `gamificationEnabled`, `leftRailCollapsed`, `taskListMetaWidth`. ThemeProvider wires `data-motion`/`data-color-mode`/`data-contrast` reactively.
+    - AppShell (new) + collapsible LeftRail + mobile BottomTabs + sheet-mobile primitive. Single `(common)/layout.tsx` mount point.
+    - Calendar: editorial header, terracotta MiniCalendar, FullCalendar token migration via globals.css overrides, sponsorship banner removed.
+    - Tasks: flex-row list with sticky header + draggable meta-column resize handle (persisted via `taskListMetaWidth`), two-line BoardTask, full-height Column drop zones with action ring on `isOver`, project sidebar collapse toggle.
+    - Focus / Now: hero treatment, mobile sheets for queue + actions, warm celebration via canvas-confetti tuned + friend-voice rotation in `src/lib/celebrate.ts`.
+    - Settings: editorial layout, Appearance / Sensory regulation / Gamification toggle sections.
+    - Auth + setup forms editorial single-column.
+    - Restyled shadcn primitives: button, card, input, select, dialog, badge (extended variant family).
+    - Sonner toasts paper-card style, shortcuts modal editorial, privacy mode replaces blur with grain-text-shadow, public landing replaced with auth-aware redirect, TanStack devtools panel removed.
+  - **Push to new repo `gone-squirrel.io`:** orphan single-commit history (`8567b03`), authored Seneca + Claude co-author. Deleted `senecabenson/gone-squirrel.io` once + recreated to flush GitHub's stale contributors-widget cache (force-push leaves objects in reflog, sidebar widget cached old upstream authors). Final state: 1 commit, 1 contributor (you), public.
+  - Remotes: `origin` → `senecabenson/gone-squirrel.io.git`, `oldfork` → `senecabenson/fluid-calendar`, `upstream` → `dotnetfactory/fluid-calendar` (untouched).
+  - Updated plan file (`~/.claude/plans/can-we-use-the-golden-fern.md`) with vision-aligned Sprint 1/2/3 roadmap based on `GoneSquirrel.io — Vision & Reference` doc.
+- **Working:**
+  - Local dev server localhost:3000, Postgres docker, Prisma client
+  - All redesigned surfaces compile clean (type-check + production build green)
+  - Hardcoded color grep across `src/components` returns zero hits
+  - Repo public at `https://github.com/senecabenson/gone-squirrel.io`
+  - Phase 1 backend bug fixes (autoSync interval, scheduler timezone, calendar transparency) all shipped
+- **Broken:**
+  - Playwright suite ran but tests fail on test-infra issues (DB seed missing, OAuth fixtures missing, selector lag) — patched some selectors, not all. Coverage gap unchanged.
+  - Local folder name still `fluid-calendar` (cosmetic; deferred per Sprint 1 plan)
+  - Vision-doc divergence: current redesign uses teal `#2D7D7D` action accent; vision wants burnt sienna `#C2410C`. Voice partially aligned but missing squirrel-specific terms ("Caught it", "Slipped", "Found your way back").
+- **Next concrete task:** Sprint 1 — cleanup + brand alignment (per plan file's "Vision-aligned roadmap" section). Order:
+  1. Strip upstream dead files: `scripts/sync-repos*.sh`, `src/components/ui/sponsorship-banner.*`, `src/components/calendar/LifetimeAccessBanner.open.tsx`, `docs/_old/`, `src/app/(common)/settings/waitlist/page.open.tsx`, `@TODO.md`
+  2. Drop SAAS dual-build pattern: simplify `next.config.js` `pageExtensions`, rename `.open.tsx`/`.open.ts` → plain `.tsx`/`.ts`, strip `isSaasEnabled` checks, drop SaaS-only settings tabs
+  3. Palette swap: teal `#2D7D7D` → sienna `#C2410C` for action; add `--accent-forest #15803D` / `--accent-honey #D97706` / `--accent-moss #65A30D` / `--accent-acorn #92400E` tokens; body `#1A1A1F` → `#2A1F1A` (warm walnut per vision)
+  4. Voice rewrite: scrub "overdue"/"missed"/"behind"/"broken streak"/"you should" from `src/components` + `src/app`. Add: empty task list "Nothing in the stash. Drop a squirrel?", task captured "Caught it. Want to crack it open now or later?", slipped header "Found your way back?"
+  5. README rewrite per plan (drop NitroClaw/EliteCoders/SaaS sections, add brief framing + ADHD-tuned highlights + Quick start + OAuth setup + License)
+  6. Verify (type-check + build + grep dead patterns) + commit + push to origin/main
+  - Time-box: ~2-3h. After this lands, decide Sprint 2 (Now Mode rebuild) vs Sprint 3 (ClickUp MVP).

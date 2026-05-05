@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
-    "build:os": "NEXT_PUBLIC_ENABLE_SAAS_FEATURES=false npm run build",
     "start": "next start",
     "lint": "next lint",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\"",
@@ -18,15 +17,6 @@
     "prisma:studio": "prisma studio",
     "clean": "rm -rf .next node_modules",
     "db:up": "docker compose up db -d",
-    "redis:up": "docker compose -f docker-compose.saas.yml up redis -d",
-    "sync": "scripts/sync-repos.sh /Users/emad/src/fluid-calendar-saas /Users/emad/src/fluid-calendar",
-    "sync:reverse": "scripts/sync-repos-reverse.sh /Users/emad/src/fluid-calendar /Users/emad/src/fluid-calendar-saas",
-    "start:prod": "infisical run --token=\"$INFISICAL_TOKEN\" --projectId=\"$PROJECT_ID\" --env=\"$INFISICAL_SECRET_ENV\" --domain=\"$INFISICAL_API_URL\" -- next start",
-    "prisma:update": "infisical run --token=\"$INFISICAL_TOKEN\" --projectId=\"$PROJECT_ID\" --env=\"$INFISICAL_SECRET_ENV\" --domain=\"$INFISICAL_API_URL\" -- npx prisma generate && infisical run --token=\"$INFISICAL_TOKEN\" --projectId=\"$PROJECT_ID\" --env=\"$INFISICAL_SECRET_ENV\" --domain=\"$INFISICAL_API_URL\" -- npx prisma migrate deploy",
-    "build:worker": "tsc -p tsconfig.worker.json",
-    "start:worker": "node dist/saas/jobs/worker.js",
-    "start:worker:prod": "infisical run --token=\"$INFISICAL_TOKEN\" --projectId=\"$PROJECT_ID\" --env=\"$INFISICAL_SECRET_ENV\" --domain=\"$INFISICAL_API_URL\" -- node dist/saas/jobs/worker-with-aliases.js",
-    "docker:publish": "docker build -t fluid-calendar:prod -f docker/production/Dockerfile . && docker tag fluid-calendar:prod eibrahim/fluid-calendar:latest && docker push eibrahim/fluid-calendar:latest",
     "prepare": "husky"
   },
   "dependencies": {

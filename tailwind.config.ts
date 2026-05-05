@@ -96,7 +96,7 @@ const config: Config = {
           dust: "hsl(var(--dom-dust))",
           "dust-soft": "hsl(var(--dom-dust-soft))",
           clay: "hsl(var(--dom-clay))",
-          "clay-soft": "hsl(var(--dom-clay-soft))",
+          "dom-clay-soft": "hsl(var(--dom-clay-soft))",
           plum: "hsl(var(--dom-plum))",
           "plum-soft": "hsl(var(--dom-plum-soft))",
           mustard: "hsl(var(--dom-mustard))",
@@ -104,6 +104,11 @@ const config: Config = {
           slate: "hsl(var(--dom-slate))",
           "slate-soft": "hsl(var(--dom-slate-soft))",
         },
+        // GoneSquirrel woodsy palette — energy/state by task type
+        forest: "hsl(var(--accent-forest))",
+        honey: "hsl(var(--accent-honey))",
+        moss: "hsl(var(--accent-moss))",
+        acorn: "hsl(var(--accent-acorn))",
       },
       fontFamily: {
         display: ["var(--font-display)", "ui-serif", "Georgia", "serif"],

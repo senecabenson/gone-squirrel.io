@@ -251,7 +251,7 @@ export function EventQuickView({
                       )}
                     >
                       Due {format(newDate(taskItem.dueDate), "PPp")}
-                      {isOverdue && " · overdue"}
+                      {isOverdue && " · slipped"}
                       {isFutureDate(taskItem.dueDate) && " · upcoming"}
                     </span>
                   ) : (

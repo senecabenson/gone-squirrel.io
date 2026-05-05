@@ -9,7 +9,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-import { isSaasEnabled } from "@/lib/config";
 import { cn } from "@/lib/utils";
 
 import { useProjectStore } from "@/store/project";
@@ -111,15 +110,11 @@ export function ProjectSidebar() {
         });
 
         if (response.ok) {
-          if (isSaasEnabled) {
-            toast.success("Task sync initiated for project");
-          } else {
-            const { fetchTasks } = useTaskStore.getState();
-            await fetchTasks();
-            toast.success("Sync Completed");
-          }
+          const { fetchTasks } = useTaskStore.getState();
+          await fetchTasks();
+          toast.success("Synced.");
         } else {
-          toast.error("Failed to sync tasks for project");
+          toast.error("Sync didn't go through. Not your fault — try again.");
         }
       } catch (error) {
         console.error("Failed to sync project tasks:", error);

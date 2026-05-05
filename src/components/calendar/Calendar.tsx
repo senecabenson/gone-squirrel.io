@@ -2,8 +2,6 @@
 
 import { useEffect } from "react";
 
-import dynamic from "next/dynamic";
-
 import {
   PiCaretLeftBold,
   PiCaretRightBold,
@@ -21,7 +19,6 @@ import { Button } from "@/components/ui/button";
 import { format, isSameDay } from "date-fns";
 
 import { addDays, newDate, subDays } from "@/lib/date-utils";
-import { isSaasEnabled } from "@/lib/config";
 import { cn } from "@/lib/utils";
 
 import {
@@ -32,14 +29,6 @@ import {
 import { useTaskStore } from "@/store/task";
 
 import { CalendarEvent, CalendarFeed } from "@/types/calendar";
-
-const LifetimeAccessBanner = dynamic(
-  () =>
-    import(`./LifetimeAccessBanner.${isSaasEnabled ? "saas" : "open"}`).then(
-      (mod) => mod.LifetimeAccessBanner
-    ),
-  { ssr: false }
-);
 
 interface CalendarProps {
   initialFeeds?: CalendarFeed[];
@@ -119,8 +108,6 @@ export function Calendar({
 
       {/* Main */}
       <main className="flex min-w-0 flex-1 flex-col">
-        <LifetimeAccessBanner />
-
         {/* Editorial header */}
         <header className="flex flex-col gap-3 border-b border-[hsl(var(--border-subtle))] px-block py-block md:flex-row md:items-end md:justify-between md:gap-block">
           <div className="flex items-end gap-3">

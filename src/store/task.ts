@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-import { isSaasEnabled } from "@/lib/config";
 
 import {
   NewTag,
@@ -296,66 +295,7 @@ export const useTaskStore = create<TaskState>()(
       triggerScheduleAllTasks: async () => {
         set({ loading: true, error: null });
         try {
-          // For open source version, call scheduleAllTasks directly
-          if (!isSaasEnabled) {
-            await get().scheduleAllTasks();
-            return;
-          }
-
-          // For SAAS version, use the background job queue
-          const jobResponse = await fetch("/api/tasks/schedule-all/queue", {
-            method: "POST",
-          });
-
-          if (!jobResponse.ok) {
-            throw new Error("Failed to queue task scheduling job");
-          }
-
-          // Set up SSE connection if not already connected
-          if (
-            !window.taskScheduleSSE ||
-            window.taskScheduleSSE.readyState === 2
-          ) {
-            const setupSSE = () => {
-              // Close existing connection if it exists but is in a closed state
-              if (window.taskScheduleSSE) {
-                window.taskScheduleSSE.close();
-              }
-
-              const eventSource = new EventSource("/api/sse");
-
-              eventSource.onmessage = (event) => {
-                try {
-                  const data = JSON.parse(event.data);
-                  if (data.type === "TASK_SCHEDULE_COMPLETE") {
-                    get().fetchTasks();
-                    // Dispatch a custom event for the NotificationProvider
-                    window.dispatchEvent(
-                      new CustomEvent("task-schedule-complete", {
-                        detail: data,
-                      })
-                    );
-                  }
-                } catch (error) {
-                  console.error(
-                    "Error parsing SSE message in task store:",
-                    error
-                  );
-                }
-              };
-
-              eventSource.onerror = () => {
-                console.error("SSE connection error");
-                eventSource.close();
-                // Try to reconnect after a delay
-                setTimeout(setupSSE, 5000);
-              };
-
-              window.taskScheduleSSE = eventSource;
-            };
-
-            setupSSE();
-          }
+          await get().scheduleAllTasks();
         } catch (error) {
           set({ error: error as Error });
           throw error;

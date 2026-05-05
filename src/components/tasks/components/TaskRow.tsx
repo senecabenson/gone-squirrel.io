@@ -197,7 +197,7 @@ export function TaskRow({
                     ? "text-[hsl(var(--urgency-overdue-soft))]"
                     : "text-ink-mute"
               )}
-              title={due.overdue ? `Overdue ${due.text}` : `Due ${due.text}`}
+              title={due.overdue ? `Slipped ${due.text}` : `Due ${due.text}`}
             >
               {due.overdue && (
                 <PiWarningDuotone className="h-3 w-3" aria-hidden="true" />

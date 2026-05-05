@@ -21,16 +21,11 @@ import { useShortcutsStore } from "@/store/shortcuts";
 
 import "../globals.css";
 
-// Notification provider — open vs SaaS variant chosen at build time.
 const NotificationProvider = dynamic<{ children: React.ReactNode }>(
   () =>
-    import(
-      `@/components/providers/NotificationProvider${
-        process.env.NEXT_PUBLIC_ENABLE_SAAS_FEATURES === "true"
-          ? ".saas"
-          : ".open"
-      }`
-    ).then((mod) => mod.NotificationProvider),
+    import("@/components/providers/NotificationProvider").then(
+      (mod) => mod.NotificationProvider
+    ),
   {
     ssr: false,
     loading: () => <>{/* Render nothing while loading */}</>,

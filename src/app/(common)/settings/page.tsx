@@ -1,9 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Suspense } from "react";
-
-import dynamic from "next/dynamic";
 
 import { AccountManager } from "@/components/settings/AccountManager";
 import { AutoScheduleSettings } from "@/components/settings/AutoScheduleSettings";
@@ -16,28 +13,12 @@ import { SystemSettings } from "@/components/settings/SystemSettings";
 import { TaskSyncSettings } from "@/components/settings/TaskSyncSettings";
 import { UserManagement } from "@/components/settings/UserManagement";
 import { UserSettings } from "@/components/settings/UserSettings";
-import { Button } from "@/components/ui/button";
 
-import { isSaasEnabled } from "@/lib/config";
 import { cn } from "@/lib/utils";
 
 import { useAdmin } from "@/hooks/use-admin";
 
 import { useSettingsStore } from "@/store/settings";
-
-const WaitlistPage = dynamic(
-  () =>
-    import(
-      `./waitlist/page${
-        process.env.NEXT_PUBLIC_ENABLE_SAAS_FEATURES === "true"
-          ? ".saas"
-          : ".open"
-      }`
-    ),
-  {
-    loading: () => <p className="text-body-sm text-ink-soft">One moment.</p>,
-  }
-);
 
 type SettingsTab =
   | "accounts"
@@ -49,9 +30,7 @@ type SettingsTab =
   | "task-sync"
   | "logs"
   | "user-management"
-  | "waitlist"
   | "import-export"
-  | "admin-dashboard"
   | "notifications";
 
 export default function SettingsPage() {
@@ -81,16 +60,6 @@ export default function SettingsPage() {
         { id: "logs", label: "Logs" },
         { id: "user-management", label: "Users" },
       ] as const;
-
-      if (isSaasEnabled) {
-        return [
-          ...baseTabs,
-          ...adminTabs,
-          { id: "waitlist", label: "Beta waitlist" },
-          { id: "admin-dashboard", label: "Admin dashboard" },
-        ] as const;
-      }
-
       return [...baseTabs, ...adminTabs] as const;
     }
 
@@ -112,9 +81,7 @@ export default function SettingsPage() {
         "system",
         "logs",
         "user-management",
-        "waitlist",
         "import-export",
-        "admin-dashboard",
         "notifications",
       ];
       if (allPossibleTabIds.includes(hash)) setActiveTab(hash);
@@ -133,13 +100,7 @@ export default function SettingsPage() {
   }, [activeTab, isHydrated]);
 
   const renderContent = () => {
-    const adminOnlyTabs = [
-      "system",
-      "logs",
-      "user-management",
-      "waitlist",
-      "admin-dashboard",
-    ];
+    const adminOnlyTabs = ["system", "logs", "user-management"];
 
     if (adminOnlyTabs.includes(activeTab) && isAdminLoading) {
       return (
@@ -186,28 +147,6 @@ export default function SettingsPage() {
         return <UserManagement />;
       case "import-export":
         return <ImportExportSettings />;
-      case "waitlist":
-        return (
-          <Suspense
-            fallback={<p className="text-body-sm text-ink-soft">One moment.</p>}
-          >
-            <WaitlistPage />
-          </Suspense>
-        );
-      case "admin-dashboard":
-        return (
-          <div className="flex flex-col items-center justify-center gap-3 py-section text-center">
-            <h2 className="font-display text-display-sm text-ink">
-              Admin dashboard
-            </h2>
-            <p className="max-w-[44ch] text-body-sm text-ink-soft">
-              Manage the application from the full admin surface.
-            </p>
-            <Button asChild>
-              <a href="/admin">Open admin</a>
-            </Button>
-          </div>
-        );
       default:
         return null;
     }
