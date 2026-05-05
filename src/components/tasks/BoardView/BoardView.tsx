@@ -1,0 +1,131 @@
+"use client";
+
+import { useMemo } from "react";
+
+import { DndContext, DragEndEvent } from "@dnd-kit/core";
+
+import { celebrateTaskCompletion } from "@/lib/celebrate";
+
+import { useProjectStore } from "@/store/project";
+import { useTaskListViewSettings } from "@/store/taskListViewSettings";
+
+import { Task, TaskStatus } from "@/types/task";
+
+import { Column } from "./Column";
+
+interface BoardViewProps {
+  tasks: Task[];
+  onEdit: (task: Task) => void;
+  onDelete: (taskId: string) => void;
+  onStatusChange: (taskId: string, status: TaskStatus) => void;
+}
+
+export function BoardView({
+  tasks,
+  onEdit,
+  onDelete,
+  onStatusChange,
+}: BoardViewProps) {
+  const { activeProject } = useProjectStore();
+  const { energyLevel, timePreference, tagIds, search } =
+    useTaskListViewSettings();
+
+  // First, filter by project
+  const projectFilteredTasks = activeProject
+    ? activeProject.id === "no-project"
+      ? tasks.filter((task) => !task.projectId)
+      : tasks.filter((task) => task.projectId === activeProject.id)
+    : tasks;
+
+  // Then apply other filters
+  const filteredTasks = useMemo(() => {
+    return projectFilteredTasks.filter((task) => {
+      // Energy level filter
+      if (
+        energyLevel?.length &&
+        (!task.energyLevel || !energyLevel.includes(task.energyLevel))
+      ) {
+        return false;
+      }
+
+      // Time preference filter
+      if (
+        timePreference?.length &&
+        (!task.preferredTime || !timePreference.includes(task.preferredTime))
+      ) {
+        return false;
+      }
+
+      // Tags filter
+      if (tagIds?.length) {
+        const taskTagIds = task.tags.map((t) => t.id);
+        if (!tagIds.some((id) => taskTagIds.includes(id))) {
+          return false;
+        }
+      }
+
+      // Search
+      if (search) {
+        const searchLower = search.toLowerCase();
+        return (
+          task.title.toLowerCase().includes(searchLower) ||
+          task.description?.toLowerCase().includes(searchLower) ||
+          task.tags.some((tag) => tag.name.toLowerCase().includes(searchLower))
+        );
+      }
+
+      return true;
+    });
+  }, [projectFilteredTasks, energyLevel, timePreference, tagIds, search]);
+
+  // Group tasks by status
+  const columns = useMemo(() => {
+    const grouped = Object.values(TaskStatus).reduce(
+      (acc, status) => {
+        acc[status] = filteredTasks.filter((task) => task.status === status);
+        return acc;
+      },
+      {} as Record<TaskStatus, Task[]>
+    );
+    return grouped;
+  }, [filteredTasks]);
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over) return;
+
+    const taskId = active.id as string;
+    const newStatus = over.id as TaskStatus;
+
+    if (Object.values(TaskStatus).includes(newStatus)) {
+      const draggedTask = filteredTasks.find((t) => t.id === taskId);
+      const becomingComplete =
+        draggedTask?.status !== TaskStatus.COMPLETED &&
+        newStatus === TaskStatus.COMPLETED;
+      onStatusChange(taskId, newStatus);
+      if (becomingComplete) {
+        celebrateTaskCompletion();
+      }
+    }
+  };
+
+  return (
+    <div className="bg-canvas flex h-full overflow-x-auto overflow-y-hidden p-block snap-x snap-mandatory">
+      <DndContext onDragEnd={handleDragEnd}>
+        <div className="flex h-full gap-3">
+          {Object.values(TaskStatus).map((status) => (
+            <div key={status} className="snap-start">
+              <Column
+                status={status}
+                tasks={columns[status]}
+                onEdit={onEdit}
+                onDelete={onDelete}
+              />
+            </div>
+          ))}
+        </div>
+      </DndContext>
+    </div>
+  );
+}

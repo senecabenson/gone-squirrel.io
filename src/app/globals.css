@@ -1,0 +1,516 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =============================================================
+   GoneSquirrel design tokens
+   Color is infrastructure: every var has one job.
+   Semantic naming so hex can swap without breaking discipline.
+   ============================================================= */
+
+@layer base {
+  :root {
+    color-scheme: light;
+
+    /* Foundation — backgrounds & surfaces (warm paper) */
+    --bg-canvas: 38 47% 96%;            /* #FAF7F2 */
+    --bg-surface: 0 0% 100%;            /* #FFFFFF — elevated cards */
+    --bg-surface-raised: 40 100% 99%;   /* #FFFEFC — modals/popovers */
+    --bg-sunken: 38 30% 92%;            /* #F2EEE7 — inputs/insets */
+
+    /* Text hierarchy (soft charcoal, never pure black) */
+    --text-primary: 240 9% 11%;         /* #1A1A1F */
+    --text-secondary: 240 6% 38%;       /* #5C5C66 */
+    --text-tertiary: 240 6% 58%;        /* #8E8E99 */
+    --text-disabled: 240 11% 78%;       /* #C4C4CC */
+
+    /* Borders / dividers — alpha-driven so they sit on canvas */
+    --border-subtle: 26 8% 12% / 0.08;
+    --border-default: 26 8% 12% / 0.12;
+    --border-strong: 26 8% 12% / 0.20;
+
+    /* Action accent — distinctive deep teal, exclusive to next-action */
+    --action-primary: 180 47% 33%;      /* #2D7D7D */
+    --action-primary-hover: 180 49% 27%;
+    --action-primary-pressed: 180 50% 22%;
+    --action-secondary: 38 21% 89%;     /* #E8E4DD */
+    --action-on-accent: 0 0% 100%;
+
+    /* Urgency spectrum — temperature, not alarms */
+    --urgency-calm: 240 6% 58%;         /* #8E8E99 */
+    --urgency-soon: 36 56% 60%;         /* #D4A55C */
+    --urgency-today: 17 65% 65%;        /* #E08A6B */
+    --urgency-now: 11 55% 53%;          /* #C95B47 */
+    --urgency-critical: 8 60% 43%;      /* #B33A2A — emergency only */
+    --urgency-overdue-soft: 32 35% 56%; /* #B89568 — old overdue, dignified */
+
+    /* State communication */
+    --state-complete: 120 24% 72%;      /* #A8C5A8 — fade @ 60% opacity */
+    --state-in-progress: 204 33% 53%;   /* #5B8FB0 — left border / glow */
+    --state-blocked: 240 6% 69%;        /* #A8A8B3 */
+    --state-scheduled: 285 19% 57%;     /* #9A7AA8 */
+    --state-captured: 45 49% 55%;       /* #C4A555 */
+
+    /* Life domain palette — solid + soft variants (use soft 90% of time) */
+    --dom-sage: 125 14% 54%;            /* #7A9B7E */
+    --dom-sage-soft: 120 22% 89%;       /* #DDE8DD */
+    --dom-dust: 213 23% 59%;            /* #7A92B0 */
+    --dom-dust-soft: 215 35% 90%;       /* #DCE4EE */
+    --dom-clay: 19 39% 60%;             /* #C08870 */
+    --dom-clay-soft: 22 49% 88%;        /* #F0DDD2 */
+    --dom-plum: 285 19% 57%;            /* #9A7AA8 */
+    --dom-plum-soft: 285 30% 89%;       /* #E5DCEA */
+    --dom-mustard: 45 50% 55%;          /* #C4A555 */
+    --dom-mustard-soft: 47 60% 86%;     /* #EFE6C8 */
+    --dom-slate: 220 9% 46%;            /* #6B7280 */
+    --dom-slate-soft: 218 10% 87%;      /* #D9DCE0 */
+
+    /* === shadcn semantic shims — map to new tokens so existing components work === */
+    --background: var(--bg-canvas);
+    --foreground: var(--text-primary);
+    --card: var(--bg-surface);
+    --card-foreground: var(--text-primary);
+    --popover: var(--bg-surface-raised);
+    --popover-foreground: var(--text-primary);
+    --primary: var(--action-primary);
+    --primary-foreground: var(--action-on-accent);
+    --secondary: var(--bg-sunken);
+    --secondary-foreground: var(--text-primary);
+    --muted: var(--bg-sunken);
+    --muted-foreground: var(--text-secondary);
+    --accent: var(--bg-sunken);                /* shadcn "accent" = subtle hover. Real action accent stays --action-primary */
+    --accent-foreground: var(--text-primary);
+    --destructive: var(--urgency-critical);
+    --destructive-foreground: 0 0% 100%;
+    --warning: var(--urgency-soon);
+    --warning-foreground: var(--text-primary);
+    --border: var(--border-default);
+    --input: var(--border-default);
+    --ring: var(--action-primary);
+    --radius: 0.625rem;
+
+    /* Card shadow — soft diffused, no hard drop */
+    --shadow-card: 0 1px 0 rgba(0, 0, 0, 0.02), 0 12px 32px -16px rgba(33, 31, 27, 0.08);
+    --shadow-raised: 0 2px 0 rgba(0, 0, 0, 0.02), 0 24px 48px -20px rgba(33, 31, 27, 0.14);
+  }
+
+  .dark,
+  [data-theme="dark"] {
+    color-scheme: dark;
+
+    /* Foundation — soft graphite, never pure black */
+    --bg-canvas: 240 7% 9%;             /* #16161A */
+    --bg-surface: 240 7% 13%;           /* #1F1F23 */
+    --bg-surface-raised: 240 7% 17%;    /* #28282E */
+    --bg-sunken: 240 8% 6%;             /* #111114 */
+
+    --text-primary: 40 22% 92%;         /* #F0EDE6 */
+    --text-secondary: 240 8% 68%;       /* #A8A8B3 */
+    --text-tertiary: 240 6% 45%;        /* #6E6E78 */
+    --text-disabled: 240 8% 26%;        /* #3F3F47 */
+
+    --border-subtle: 40 22% 92% / 0.08;
+    --border-default: 40 22% 92% / 0.12;
+    --border-strong: 40 22% 92% / 0.20;
+
+    /* Action accent lifts slightly in dark for contrast on graphite */
+    --action-primary: 180 45% 40%;
+    --action-primary-hover: 180 47% 47%;
+    --action-primary-pressed: 180 50% 33%;
+    --action-secondary: 240 7% 22%;
+    --action-on-accent: 240 7% 9%;
+
+    /* Urgency lifts in dark */
+    --urgency-calm: 240 6% 50%;
+    --urgency-soon: 36 60% 65%;
+    --urgency-today: 17 60% 68%;
+    --urgency-now: 11 55% 60%;
+    --urgency-critical: 8 60% 55%;
+    --urgency-overdue-soft: 32 30% 55%;
+
+    --state-complete: 120 22% 60%;
+    --state-in-progress: 204 35% 60%;
+    --state-blocked: 240 6% 50%;
+    --state-scheduled: 285 22% 65%;
+    --state-captured: 45 50% 60%;
+
+    /* Life domain — dark soft variants */
+    --dom-sage-soft: 125 12% 20%;       /* #2D3A2F */
+    --dom-dust-soft: 213 20% 21%;       /* #2A3340 */
+    --dom-clay-soft: 19 25% 19%;        /* #3D2C25 */
+    --dom-plum-soft: 285 16% 20%;       /* #352B3A */
+    --dom-mustard-soft: 47 35% 17%;     /* #3A331E */
+    --dom-slate-soft: 220 10% 18%;      /* #2A2D33 */
+
+    --background: var(--bg-canvas);
+    --foreground: var(--text-primary);
+    --card: var(--bg-surface);
+    --card-foreground: var(--text-primary);
+    --popover: var(--bg-surface-raised);
+    --popover-foreground: var(--text-primary);
+    --primary: var(--action-primary);
+    --primary-foreground: var(--action-on-accent);
+    --secondary: var(--bg-surface-raised);
+    --secondary-foreground: var(--text-primary);
+    --muted: var(--bg-surface-raised);
+    --muted-foreground: var(--text-secondary);
+    --accent: var(--bg-surface-raised);
+    --accent-foreground: var(--text-primary);
+    --destructive: var(--urgency-critical);
+    --destructive-foreground: var(--text-primary);
+    --warning: var(--urgency-soon);
+    --warning-foreground: var(--text-primary);
+    --border: var(--border-default);
+    --input: var(--border-default);
+    --ring: var(--action-primary);
+
+    --shadow-card: 0 1px 0 rgba(0, 0, 0, 0.3), 0 16px 40px -20px rgba(0, 0, 0, 0.55);
+    --shadow-raised: 0 2px 0 rgba(0, 0, 0, 0.4), 0 28px 56px -24px rgba(0, 0, 0, 0.7);
+  }
+
+  /* Reduced-color sensory mode — collapses life-domain hues to ink-mute scale */
+  [data-color-mode="reduced"] {
+    --dom-sage-soft: var(--bg-sunken);
+    --dom-dust-soft: var(--bg-sunken);
+    --dom-clay-soft: var(--bg-sunken);
+    --dom-plum-soft: var(--bg-sunken);
+    --dom-mustard-soft: var(--bg-sunken);
+    --dom-slate-soft: var(--bg-sunken);
+    --dom-sage: var(--text-tertiary);
+    --dom-dust: var(--text-tertiary);
+    --dom-clay: var(--text-tertiary);
+    --dom-plum: var(--text-tertiary);
+    --dom-mustard: var(--text-tertiary);
+    --dom-slate: var(--text-tertiary);
+  }
+
+  /* High-contrast mode — lifts AA → AAA */
+  [data-contrast="high"] {
+    --text-primary: 0 0% 0%;
+    --text-secondary: 240 8% 22%;
+    --border-subtle: 26 8% 12% / 0.18;
+    --border-default: 26 8% 12% / 0.30;
+    --border-strong: 26 8% 12% / 0.50;
+  }
+  [data-contrast="high"].dark,
+  [data-contrast="high"][data-theme="dark"] {
+    --text-primary: 0 0% 100%;
+    --text-secondary: 40 22% 80%;
+    --border-subtle: 40 22% 92% / 0.20;
+    --border-default: 40 22% 92% / 0.35;
+    --border-strong: 40 22% 92% / 0.55;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-background text-foreground;
+    background-image: url("/textures/grain.svg");
+    background-size: 240px 240px;
+    background-repeat: repeat;
+  }
+  .dark body,
+  [data-theme="dark"] body {
+    /* Grain reads stronger on dark — soften via blend */
+    background-blend-mode: overlay;
+  }
+
+  /* Typography rhythm */
+  h1, h2, h3, .font-display {
+    font-family: var(--font-display), ui-serif, Georgia, serif;
+    font-feature-settings: "ss01", "ss02";
+    letter-spacing: -0.012em;
+  }
+  code, kbd, pre, .font-mono, time {
+    font-family: var(--font-mono), ui-monospace, "JetBrains Mono", Menlo, monospace;
+    font-feature-settings: "tnum", "zero";
+  }
+}
+
+/* Motion — physics, no bounce. Reduce-motion honored. */
+@layer base {
+  :root {
+    --ease-settle: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --ease-slide: cubic-bezier(0.32, 0.72, 0, 1);
+    --dur-settle: 280ms;
+    --dur-slide: 220ms;
+    --dur-fade: 160ms;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  [data-motion="off"] *,
+  [data-motion="off"] *::before,
+  [data-motion="off"] *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* =============================================================
+   FullCalendar — token migration
+   ============================================================= */
+.fc {
+  --fc-page-bg-color: hsl(var(--bg-canvas));
+  --fc-neutral-bg-color: hsl(var(--bg-sunken) / 0.6);
+  --fc-neutral-text-color: hsl(var(--text-secondary));
+  --fc-border-color: hsl(var(--border-default));
+
+  --fc-button-text-color: hsl(var(--text-primary));
+  --fc-button-bg-color: hsl(var(--bg-surface));
+  --fc-button-border-color: hsl(var(--border-default));
+  --fc-button-hover-bg-color: hsl(var(--bg-sunken));
+  --fc-button-hover-border-color: hsl(var(--border-default));
+  --fc-button-active-bg-color: hsl(var(--bg-sunken));
+  --fc-button-active-border-color: hsl(var(--border-strong));
+
+  --fc-event-bg-color: hsl(var(--dom-dust-soft));
+  --fc-event-border-color: hsl(var(--dom-dust));
+  --fc-event-text-color: hsl(var(--text-primary));
+  --fc-event-selected-overlay-color: hsl(var(--action-primary) / 0.12);
+
+  --fc-more-link-bg-color: hsl(var(--bg-sunken));
+  --fc-more-link-text-color: hsl(var(--text-secondary));
+
+  --fc-non-business-color: hsl(var(--bg-sunken) / 0.4);
+  --fc-bg-event-color: hsl(var(--dom-dust) / 0.18);
+  --fc-bg-event-opacity: 0.18;
+  --fc-highlight-color: hsl(var(--action-primary) / 0.10);
+  --fc-today-bg-color: hsl(var(--action-primary) / 0.04);
+  --fc-now-indicator-color: hsl(var(--action-primary));
+  @apply h-full;
+}
+
+.fc .fc-toolbar {
+  @apply px-2 py-4;
+}
+
+.fc .fc-toolbar-title {
+  font-family: var(--font-display), serif;
+  @apply text-2xl font-medium tracking-tight text-foreground;
+}
+
+.fc .fc-button {
+  font-family: var(--font-body), sans-serif;
+  background: hsl(var(--bg-surface));
+  color: hsl(var(--text-primary));
+  border: 1px solid hsl(var(--border-default));
+  box-shadow: none;
+  text-transform: none;
+  letter-spacing: 0;
+  @apply rounded-md px-3 py-1.5 text-sm font-medium transition-colors;
+}
+.fc .fc-button:hover {
+  background: hsl(var(--bg-sunken));
+}
+.fc .fc-button:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px hsl(var(--action-primary) / 0.35);
+}
+.fc .fc-button-primary:not(:disabled).fc-button-active,
+.fc .fc-button-primary:not(:disabled):active {
+  background: hsl(var(--bg-sunken));
+  color: hsl(var(--text-primary));
+  border-color: hsl(var(--border-strong));
+}
+
+.fc .fc-daygrid-day-frame {
+  @apply min-h-[140px];
+}
+
+.fc .fc-timegrid-slot {
+  @apply h-20;
+}
+
+.fc .fc-timegrid-slot-label {
+  font-family: var(--font-mono), monospace;
+  color: hsl(var(--text-tertiary));
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.fc .fc-event {
+  border: none;
+  border-left: 2px solid hsl(var(--dom-dust));
+  background: hsl(var(--dom-dust-soft));
+  color: hsl(var(--text-primary));
+  box-shadow: var(--shadow-card);
+  @apply cursor-pointer rounded-sm;
+}
+
+.fc .fc-event-main {
+  @apply p-1.5;
+}
+
+.fc .fc-event-title {
+  @apply font-medium;
+}
+
+.fc .fc-event-time {
+  font-family: var(--font-mono), monospace;
+  color: hsl(var(--text-secondary));
+  @apply text-[11px];
+}
+
+.fc .fc-timegrid-now-indicator-line {
+  border-color: hsl(var(--action-primary));
+  border-top-width: 1px;
+}
+
+.fc .fc-timegrid-now-indicator-arrow {
+  border-color: hsl(var(--action-primary));
+}
+
+.fc .fc-day-today {
+  background: hsl(var(--action-primary) / 0.04);
+}
+
+.fc .fc-day-header,
+.fc .fc-col-header-cell {
+  background: transparent;
+  border-bottom: 1px solid hsl(var(--border-default));
+  @apply py-2;
+}
+
+.fc .fc-col-header-cell-cushion {
+  font-family: var(--font-body), sans-serif;
+  color: hsl(var(--text-secondary));
+  font-weight: 500;
+  @apply text-xs uppercase tracking-wide;
+}
+
+.fc .fc-daygrid-day-number {
+  color: hsl(var(--text-primary));
+  font-family: var(--font-mono), monospace;
+  font-size: 12px;
+  @apply px-2 py-1;
+}
+
+.fc .fc-scrollgrid {
+  border-color: hsl(var(--border-subtle));
+}
+
+/* =============================================================
+   Command palette (cmdk) — restyled
+   ============================================================= */
+[cmdk-root] {
+  max-width: 640px;
+  width: 100%;
+  background-color: hsl(var(--bg-surface-raised));
+  border-radius: 12px;
+  border: 1px solid hsl(var(--border-default));
+  box-shadow: var(--shadow-raised);
+}
+
+[cmdk-input] {
+  border: none;
+  width: 100%;
+  font-family: var(--font-body), sans-serif;
+  font-size: 15px;
+  padding: 16px 20px;
+  outline: none;
+  background: transparent;
+  color: hsl(var(--text-primary));
+  border-bottom: 1px solid hsl(var(--border-subtle));
+}
+
+[cmdk-input]::placeholder {
+  color: hsl(var(--text-tertiary));
+}
+
+[cmdk-item] {
+  cursor: pointer;
+  height: 44px;
+  border-radius: 8px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  margin: 2px 8px;
+  color: hsl(var(--text-primary));
+  user-select: none;
+  transition: background 120ms ease;
+}
+
+[cmdk-item][aria-selected="true"] {
+  background: hsl(var(--bg-sunken));
+}
+
+[cmdk-item][aria-disabled="true"] {
+  color: hsl(var(--text-tertiary));
+  cursor: not-allowed;
+}
+
+[cmdk-group-heading] {
+  user-select: none;
+  font-family: var(--font-body), sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: hsl(var(--text-tertiary));
+  padding: 12px 16px 4px;
+}
+
+/* =============================================================
+   Privacy mode — replace harsh blur with grain-heavy overlay
+   ============================================================= */
+.privacy-mode-active .private-content,
+.privacy-mode-active .event-title,
+.privacy-mode-active .event-description,
+.privacy-mode-active .event-location,
+.privacy-mode-active .event-attendees,
+.privacy-mode-active .calendar-event-title,
+.privacy-mode-active .calendar-event-description,
+.privacy-mode-active .task-title,
+.privacy-mode-active .task-description,
+.privacy-mode-active .task-notes,
+.privacy-mode-active .focus-notes,
+.privacy-mode-active .calendar-name,
+.privacy-mode-active .project-name {
+  position: relative;
+  color: transparent;
+  text-shadow: 0 0 8px hsl(var(--text-secondary) / 0.8);
+  user-select: none;
+  transition: text-shadow var(--dur-fade) ease;
+}
+
+.privacy-mode-toggle {
+  z-index: 100;
+}
+
+/* =============================================================
+   Sonner toast — paper card, no slam
+   ============================================================= */
+.notification-toast,
+[data-sonner-toast] {
+  background: hsl(var(--bg-surface-raised)) !important;
+  color: hsl(var(--text-primary)) !important;
+  border: 1px solid hsl(var(--border-subtle)) !important;
+  box-shadow: var(--shadow-card) !important;
+  font-family: var(--font-body), sans-serif !important;
+}
+
+.notification-toast [data-description] {
+  color: hsl(var(--text-secondary)) !important;
+  font-weight: 450 !important;
+  opacity: 1 !important;
+}

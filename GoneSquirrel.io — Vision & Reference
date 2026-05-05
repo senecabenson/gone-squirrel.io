@@ -1,0 +1,416 @@
+# 🐿️ GoneSquirrel.io — Vision & Reference
+
+> **Purpose of this document**: Reference guide for iterating from the current FluidCalendar fork toward the GoneSquirrel.io vision. Used by Claude Code to evaluate proposed changes against the destination, and by future-Seneca to remember what "good" looks like when 11pm hyperfocus tries to add a streak counter.
+
+> **How to use this**: When proposing or evaluating any change, ask three questions:
+> 1. Does it move us toward the vision in this doc, away from it, or sideways?
+> 2. Does it violate any of the ADHD-Native Interaction Rules?
+> 3. Is the cost (build time, complexity, maintenance) worth the distance gained?
+
+> **What this document is NOT**: A build plan. A spec. A promise to ship every feature listed. It's a north star. Some features here may never get built, and that's fine.
+
+---
+
+## 1. CURRENT STATE & STARTING POINT
+
+This project began as a fork of [FluidCalendar](https://github.com/dotnetfactory/fluid-calendar) — an open-source Motion alternative built in Next.js 15 + Prisma + Postgres. The fork was chosen over a from-scratch build for two reasons: time-to-working-tool, and the hard infrastructure (calendar OAuth, scheduling primitives, FullCalendar UI) was already solved.
+
+**What FluidCalendar gives us out of the box:**
+- Google Calendar / Outlook / CalDAV integration
+- Task auto-scheduling with energy-level inputs
+- Focus Mode (passive task selector)
+- Project organization, tags, priorities
+- Self-hostable via Docker
+- Next.js + Prisma + Postgres stack
+
+**What we changed first** (foundational fixes, see WORKING_NOTES.md for specifics):
+- Calendar sync no longer cuts off mid-month
+- Auto-scheduler now respects user-defined work hours
+- Auto-scheduler now matches task energy to time-of-day energy preferences
+
+**What we're iterating toward**: An ADHD-native, voice-friendly, ClickUp-integrated productivity layer with a distinctive brand voice and a Now Mode that captures motivation in real time. The destination is described in the rest of this document.
+
+---
+
+## 2. PROJECT IDENTITY
+
+### Name & Origin
+**GoneSquirrel.io** — "Squirrel!" is universal ADHD shorthand for distraction. The name reframes distraction as part of the rhythm rather than a failure, and the app's job is to catch your brain when it darts off and bring it back without judgment.
+
+### North-star feeling
+**"My brain just exhaled."**
+
+The user opens the app overwhelmed. They close it feeling held. Every feature gets evaluated against whether it removes cognitive load or adds it.
+
+### Brand personality
+Warm, a little witty, never preachy. Like a friend who gets it. Acknowledges squirrel moments with humor, never shame. The app's voice is the voice of someone who has lived with ADHD, not someone trying to fix it.
+
+### Voice anchors
+- **"Squirrel moments"** — the term for distraction events, used affectionately
+- **"Caught it"** — when something is captured into the Stash ("Caught it. Want to crack it open now or later?")
+- **"Found your way back"** — return-to-flow language after interruption
+- **"Slipped"** — neutral language for missed tasks ("3 things slipped to today")
+
+### Language to avoid
+"Productivity," "hustle," "crush," "you should," "failed," "missed," "behind," "overdue," "broken streak," excessive emojis, all caps for emphasis, motivational-poster energy.
+
+---
+
+## 3. THE USER (PRIMARY: SENECA, BUT GENERALIZABLE)
+
+ADHD professional, juggling demanding job + side ventures + family, capturing thoughts in bursts not workflows, oscillating between hyperfocus and paralysis. Has tried Motion, Notion, Todoist, Sunsama — abandoned each for friction, shame language, or pricing.
+
+**Key truths to design against:**
+- Captures in bursts, not in workflows
+- Hyperfocuses when interested, paralysis when not
+- Time blindness — "later" is meaningless without visual anchor
+- Loses context constantly when switching tasks
+- Carries productivity-tool shame from past tools
+- Best work happens in narrow energy windows that don't match the calendar
+- Task initiation is the wall; flow is the strength
+
+**The implication for design**: every feature should reduce task-initiation friction first, organize second.
+
+---
+
+## 4. ADHD COGNITION — DESIGN CONSTRAINTS
+
+These are not features. They're constraints that every change should respect. When in doubt, return here.
+
+**Interest-based attention**: ADHD brains release dopamine for novelty, urgency, challenge, interest — not importance. High-priority boring tasks don't get done; low-priority interesting tasks absolutely do. → *Implication*: Now Mode exists. Sprint planning factors variety. Never sort purely by deadline or priority.
+
+**Time blindness**: 30 minutes feels identical to 2 hours without visual anchor. → *Implication*: Always show duration as visual block AND number. Show "in 2 hours" alongside "3:00 PM."
+
+**Working memory deficits**: Things not visible cease to exist. → *Implication*: Stash badge persistent on tab. Active Pomodoro stays sticky. Reshuffle banners surface missed work proactively.
+
+**Task initiation friction**: The hardest moment is starting. → *Implication*: Now Mode → Start Now is 3 taps maximum. No confirmation dialogs. Defaults eliminate decisions.
+
+**Hyperfocus**: Strength to support, not interrupt. → *Implication*: "Keep Going +25" is a primary button. Notifications during deep work are minimal.
+
+**Rejection sensitivity & shame**: Productivity tool shame triggers avoidance. → *Implication*: Neutral language always. No red alerts. No streak counters that break visibly.
+
+**Decision fatigue**: Each decision drains executive function. → *Implication*: Maximum 3 primary choices per screen. AI suggests, user confirms with one tap.
+
+**Energy fluctuation**: Non-linear, doesn't match calendar. → *Implication*: Tag every task and block with energy. Match in real time, not at planning time.
+
+**Context-switching cost**: 15+ minutes recovery per interruption. → *Implication*: Pomodoro completion shows context to ease re-entry. Notifications include "context preserved" reassurance.
+
+---
+
+## 5. ADHD-NATIVE INTERACTION RULES (NON-NEGOTIABLE)
+
+These are constraints, not suggestions. Any proposed change that violates one of these requires explicit conversation, not silent override.
+
+1. **No empty states without an action.** Every empty view has one obvious next step.
+2. **No required fields on capture.** Friction kills capture. Squirrel moments need to be caught fast.
+3. **Defaults beat decisions.** AI suggests, user confirms with one tap.
+4. **Reschedules are graceful.** "Slipped to tomorrow," never "Overdue!"
+5. **Time blindness aids everywhere.** Visual blocks AND minutes. Relative AND absolute time.
+6. **Hyperfocus respect.** "Keep Going +25" is a first-class button on Pomodoro completion, not buried.
+7. **One screen, one decision.** Never present more than 3 primary choices at once.
+8. **Haptic feedback** on iOS for: task completion, Pomodoro transitions, drag-and-drop snap.
+9. **Reduced motion respected.** Transforms become opacity fades. Pulses become static.
+10. **No streak shaming.** Breaking a streak shows "Fresh start tomorrow," never a broken-flame icon.
+11. **Squirrel moments are features, not failures.** Distraction is part of the rhythm. Language and design reinforce this.
+
+---
+
+## 6. FEATURE VISION (ORGANIZED BY AREA, NOT BUILD ORDER)
+
+Each feature area below has three sections: **What FluidCalendar gives us today**, **What the GoneSquirrel vision adds**, and **Decision criteria** for evaluating changes.
+
+---
+
+### 6.1 CAPTURE & STASH (formerly Brain Dump)
+
+**FluidCalendar today**: Standard task creation forms. Title required. Fields for description, priority, deadline, energy level, project. Functional but high-friction for ADHD brain dumps.
+
+**GoneSquirrel vision**:
+- Chat-first capture with persistent dock at bottom of every screen ("Squirrel? Drop it here.")
+- Voice input via Web Speech API — speak unstructured thoughts, AI parses
+- Stash tab for unstructured/incomplete thoughts (current FluidCalendar treats incomplete tasks as "incomplete" rather than its own state)
+- Stash entries get a "Crack it open" flow — conversational AI-driven clarification, one question at a time, with chip-based defaults
+- Bulk mode: "Sort the stash" — guided session through multiple captures
+- Stash entries from ClickUp/external sources are flagged and contextualized
+
+**Decision criteria for changes here**:
+- Does this reduce capture friction or add it?
+- Can I capture in <3 seconds, including incomplete thoughts?
+- Does the AI ask the minimum questions needed, or does it interrogate?
+- Are defaults always offered ("not sure, you guess")?
+
+---
+
+### 6.2 SCHEDULING & TODAY VIEW
+
+**FluidCalendar today**: Auto-scheduler places tasks into free calendar slots. Now respects work hours (post-fix) and energy preferences (post-fix). FullCalendar UI shows day/week/month views. Tasks render in calendar slots.
+
+**GoneSquirrel vision**:
+- Today view as the default, not week — ADHD brains don't think in weeks
+- Energy-tinted schedule blocks (deep work / light work / gym / personal) as visual anchors
+- Capacity pills at top showing energy load (high/medium/low scheduled vs available)
+- "Reshuffle" banner with warm language when tasks slip
+- Tasks show energy-match indicator (forest dot = good fit, honey = okay)
+- Pomodoro sticky card always at top when active
+- 80% capacity cap as ADHD buffer (non-negotiable — never overbook)
+- Now-line that animates smoothly through the day
+
+**Decision criteria**:
+- Does this respect energy as a first-class scheduling input, or treat it as cosmetic?
+- Does the day view feel calm or busy?
+- Are visual time anchors present everywhere duration is shown?
+- Does the 80% capacity cap hold under all scheduling logic?
+
+---
+
+### 6.3 NOW MODE (THE CORE DIFFERENTIATOR)
+
+**FluidCalendar today**: Has a "Focus Mode" that's a passive top-task selector with confetti on completion. Distraction-free interface. Decent foundation but philosophically different from Now Mode.
+
+**GoneSquirrel vision**: Now Mode is an *active motivation-capture flow*, not a passive picker.
+
+Triggered by button OR detected phrase in chat ("I feel like…", "what should I do," "I have time").
+
+Three steps, full-screen takeover with sienna-tinted gradient:
+1. **Energy check**: "How's the brain right now?" → 3 cards (Low / Medium / High) with brief descriptors
+2. **Time available**: Pill grid (15m / 30m / 45m / 60m / 90m+ / Custom)
+3. **Recommendations**: 2–3 task cards with title, meta, *"why this fits"* reasoning line, and a full-width "Start Now" button
+
+Scoring: energy match 40% / deadline proximity 30% / staleness 15% / variety 15%
+
+"Start Now" → card expands to Pomodoro, no confirmation dialog, friction kills momentum.
+
+**Decision criteria**:
+- Is the path from "I feel ready" to "I'm working" 3 taps or fewer?
+- Does the reasoning line feel warm or corporate?
+- Does it ever say "you should"?
+- Is there ever a confirmation dialog between "tap Start" and "timer running"?
+
+---
+
+### 6.4 SPRINT PLANNING
+
+**FluidCalendar today**: Limited weekly planning beyond auto-schedule. Tasks land where the algorithm puts them.
+
+**GoneSquirrel vision**:
+- Sprint tab with weekly capacity grid (7 columns × 3 energy rows)
+- Backlog → This Sprint drag-and-drop with live capacity update
+- "Plan My Week" AI button → returns realistic plan with reasoning bullets ("Left Thursday afternoon light because you have 3 deep work blocks earlier")
+- 80% capacity cap enforced
+- Variety preserved — never stack 4 deep-work days in a row
+
+**Decision criteria**:
+- Does the AI explain its reasoning in plain language?
+- Is the 80% cap enforced even when user wants to overcommit?
+- Does drag-and-drop feel responsive and forgiving?
+
+---
+
+### 6.5 CLICKUP INTEGRATION (HIGHEST PRIORITY GAP)
+
+**FluidCalendar today**: No ClickUp integration. Calendar-focused, not work-system-focused.
+
+**GoneSquirrel vision**: ClickUp is the user's source of truth for work content; GoneSquirrel is the personal execution layer. Two-way sync, asymmetric:
+
+**Pull from ClickUp**: tasks assigned to user, with title/description/status/deadline/priority/list-context
+**Push to ClickUp**: status changes (when Pomodoro starts → "In Progress"; on completion → "Complete"), time entries via ClickUp's time tracking API
+**Don't push**: energy level, task type, scheduled time (private to GoneSquirrel)
+
+OAuth flow, webhook + polling for incremental sync, status mapping (configurable per workspace), 80% capacity cap respected when ClickUp tasks enter the scheduler.
+
+Multi-workspace support important — separate ChemPoint and Capture Corner contexts so they don't compete in Now Mode.
+
+**Decision criteria**:
+- Does ClickUp remain the source of truth for content, with GoneSquirrel owning only execution metadata?
+- Can the user see which workspace a task came from at a glance?
+- Does the status push toggle default OFF for privacy?
+
+(Full integration spec maintained separately in `CLICKUP_INTEGRATION.md`)
+
+---
+
+### 6.6 NOTIFICATIONS
+
+**FluidCalendar today**: Basic notification system, mostly browser-based.
+
+**GoneSquirrel vision**:
+- Web Push + Service Worker, PWA-installable on iOS home screen
+- 7 notification types: pre-task, Pomodoro complete, break ending, task missed (warm tone), daily planning, Now Mode nudge, optional end-of-day reflection
+- Interactive actions: Start Now / Snooze 25 / Mark Done / Skip Break / Extend Break / Reshuffle
+- Daily cap: 8 notifications max per 24h
+- Adaptive frequency: 5 dismissals in a row → auto-suggest disabling that type
+- DND respected, batch summary on wake
+- All language warm, never shaming
+
+**Decision criteria**:
+- Would this notification feel like a withdrawal from the user's trust account?
+- Is the value clearly worth the interruption?
+- Can the user act on it directly from the notification, or do they have to open the app?
+
+---
+
+### 6.7 CHAT & VOICE INTERFACE
+
+**FluidCalendar today**: No conversational interface. UI-driven only.
+
+**GoneSquirrel vision**:
+- Persistent chat dock at bottom of every screen (collapsible)
+- iMessage-styled, NOT ChatGPT-styled
+- Voice input with live transcription waveform
+- AI responses include inline action cards (proposed schedule with Approve/Tweak buttons)
+- Suggestion chips when idle ("Plan tomorrow" / "What's next?" / "Reshuffle today")
+- Acknowledges context: "Got it — finishing the Q2 report by Friday."
+- Surfaces assumptions transparently: "I'm assuming this is deep work and 2 hours. Right?"
+
+**Decision criteria**:
+- Does the chat feel like a friend or like a corporate bot?
+- Does it ever lecture or use motivational language?
+- Are inline actions present whenever the AI proposes something?
+
+---
+
+### 6.8 ONBOARDING
+
+**FluidCalendar today**: Standard signup flow. Connect calendar, configure settings.
+
+**GoneSquirrel vision**: 90 seconds, 5 decisions max:
+1. Welcome
+2. Name
+3. Energy peaks (multi-select up to 2 from 5 time windows)
+4. Default schedule blocks (template picker or custom)
+5. Calendar connect (Google primary, optional)
+6. Notifications opt-in
+7. First capture ("Try it. Tell me one thing on your mind.")
+
+"Set up later" escape on every screen except welcome and capture.
+
+**Decision criteria**:
+- Total decisions ≤ 5?
+- Total time ≤ 90 seconds for fast users?
+- Does every step have a skip path?
+
+---
+
+## 7. DESIGN SYSTEM REFERENCE
+
+### Color (light mode, woodsy/warm)
+- `--bg-canvas: #FAF7F2` (warm cream, never pure white)
+- `--text-primary: #2A1F1A` (warm near-black, dark walnut)
+- `--brand-primary: #C2410C` (burnt sienna — the squirrel-rust action color)
+- `--accent-forest: #15803D` (deep work, "found it")
+- `--accent-honey: #D97706` (energy, alerts, urgency)
+- `--accent-moss: #65A30D` (light work, success)
+- `--accent-acorn: #92400E` (caution, never alarm)
+
+Dark mode shifts to "working by firelight" — deep walnut backgrounds with lifted sienna and amber accents. Full token set in `tailwind.config.ts` once implemented.
+
+### Typography
+Inter for UI, JetBrains Mono for numerals/timers. Display type only for greetings, Now Mode prompts, and empty state headlines. Standard scale from `display` (32px) down to `caption` (12px).
+
+### Motion
+- `ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1)` — default
+- Durations: instant 120ms / quick 200ms / smooth 320ms / deliberate 480ms
+- Nothing snaps. Nothing bounces aggressively. Reduced-motion fully respected.
+
+### Component conventions
+- Card radius: 20px default (calmer than typical 12-16px)
+- Touch targets: 44×44px minimum
+- Stash entries get organic radius (`rounded-[28px_24px_26px_22px]`) for acorn-like feel
+- Pomodoro sticky card uses brand-primary (sienna) background, switches to forest on break
+
+### Logo
+Simple, friendly squirrel silhouette with slight head-tilt — curious, not frantic. Used as favicon, PWA icon, occasional empty-state accent. Never animated obnoxiously.
+
+(Full design system maintained separately in `DESIGN_SYSTEM.md` once we move beyond FluidCalendar's existing styling patterns.)
+
+---
+
+## 8. DATA MODEL VISION
+
+FluidCalendar's existing Prisma schema is the starting point. We extend it rather than replace it.
+
+### New columns on existing `tasks` table (when needed)
+- `energy_level` — already supported by FluidCalendar in some form, verify and align
+- `task_type` enum: deep_work / light_work / admin / creative / physical / personal
+- `external_source` — for ClickUp/Jira/etc integration ('clickup', 'jira', null)
+- `external_id`, `external_url`, `external_metadata jsonb`
+- `last_synced_at`, `sync_status`
+- `needs_clarification bool` — for Stash entries
+- Status value `'stash'` added to enum (rename of `brain_dump`)
+
+### New tables (when those features land)
+- `pomodoro_sessions` — task_id, started_at, ended_at, duration, was_completed, interruption_count
+- `notifications_log` — type, payload, sent_at, action_taken (for adaptive frequency)
+- `integration_syncs` — provider config, scope, sync state
+- `integration_sync_log` — per-event audit trail
+- `user_preferences` extensions — energy_peaks jsonb, dnd_start/end, daily_planning_time, voice_enabled
+
+### What to preserve from FluidCalendar
+Their calendar event tables, OAuth token storage, project structures, schedule blocks, NextAuth schema. Don't refactor what works.
+
+---
+
+## 9. TECH STACK CONSIDERATIONS
+
+**Inherited from FluidCalendar**: Next.js 15, TypeScript, Prisma, Postgres, FullCalendar, NextAuth, Tailwind. We work with this stack, not against it.
+
+**Additions over time**:
+- OpenAI API integration for parsing, clarifying, Now Mode reasoning, sprint planning (server-side calls only, no exposed keys)
+- Web Push library for PWA notifications
+- Web Speech API for voice input (browser-native, no extra dep)
+- Framer Motion (if not already present) for the motion specs above
+- Lucide React for icons (likely already present)
+
+**Future considerations** (not Phase 1):
+- Capacitor wrapper for native iOS app (App Store, real push notifications, Siri Shortcuts)
+- Tauri wrapper for native Mac desktop app
+- Tailscale or Cloudflare Tunnel for secure VPS access without public exposure
+
+**What we don't add unless proven necessary**:
+- New JS frameworks (we live in Next.js)
+- A separate companion app (architecture stays unified)
+- Real-time collaboration features (this is a personal tool)
+
+---
+
+## 10. WORKING WITH CLAUDE CODE — RITUALS
+
+**Starting any session**:
+> "Read WORKING_NOTES.md and tell me what's next."
+
+**When proposing a change, Claude Code should**:
+1. Identify which feature area in this document the change relates to
+2. Check it against the ADHD-Native Interaction Rules
+3. Surface any tradeoffs or risks
+4. Show the proposed change before applying it
+5. Update WORKING_NOTES.md after each session
+
+**Ending any session**:
+> "Update WORKING_NOTES.md with: what we did, what's working, what's broken, what's the very next step. Be specific enough that I can pick up cold."
+
+**When stuck**:
+> "I'm stuck on [thing]. Don't fix it for me yet. Ask me 3 clarifying questions to figure out what I actually need."
+
+---
+
+## 11. WHAT THIS DOCUMENT IS NOT
+
+- **Not a build plan**: see WORKING_NOTES.md for current sprint, FRICTIONS.md for priorities
+- **Not a spec**: features may be reshaped, replaced, or skipped based on real usage
+- **Not a promise**: this is a north star, not a contract
+- **Not exhaustive**: edge cases, error handling, accessibility details, and analytics are addressed elsewhere
+
+The vision evolves with use. When real-world friction reveals something this document didn't anticipate, the document gets updated. When a feature in this document turns out to not matter, it gets removed. Truth lives in usage.
+
+---
+
+## 12. THE TEST FOR EVERY CHANGE
+
+Before merging, ask:
+
+**Does it serve a brain under load?**
+
+If yes → consider it.
+If no → cut it, no matter how clever.
+
+The user is one-handed on a phone, distracted, between meetings, mid-squirrel-moment. Every interaction should feel inevitable — and a little bit warm.
