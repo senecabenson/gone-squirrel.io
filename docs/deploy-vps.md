@@ -1,8 +1,10 @@
 # GoneSquirrel — Hostinger VPS deploy
 
 One-time setup + deploy runbook for `gonesquirrel.nilegrowthworks.com`. Stack:
-Next.js 15 standalone + Postgres 16 + Caddy 2 (auto-SSL via Let's Encrypt),
-all in a single `docker-compose.prod.yml`.
+Next.js 15 standalone + Postgres 16, fronted by the **existing** Traefik
+reverse proxy already running on the VPS (`root-traefik-1`). Traefik
+handles TLS via the `mytlschallenge` resolver, same as the other apps on
+this host (n8n, etc).
 
 ## Prerequisites
 
@@ -62,11 +64,12 @@ chmod +x scripts/deploy.sh scripts/backup-postgres.sh
 ./scripts/deploy.sh
 ```
 
-Caddy will obtain a Let's Encrypt cert for `gonesquirrel.nilegrowthworks.com` on first
-boot (takes 10–30s). If the health check fails, watch the cert acquisition:
+Traefik (already running) will discover the new container via docker
+labels and provision a Let's Encrypt cert on first request (10–30s). If
+the health check fails, watch traefik:
 
 ```bash
-docker compose -f docker-compose.prod.yml logs -f caddy
+docker logs -f root-traefik-1 | grep gonesquirrel
 ```
 
 ## Google OAuth update
@@ -130,14 +133,13 @@ gunzip < /var/backups/gonesquirrel/postgres-<TS>.sql.gz | \
 | Symptom | First thing to check |
 |---------|----------------------|
 | `502 Bad Gateway` | `docker compose logs app` — likely a build or migrate failure. |
-| Cert never issued | `docker compose logs caddy` — DNS not resolving, port 80 blocked, or rate-limited (try again in 1h). |
+| Cert never issued | `docker logs root-traefik-1 \| grep gonesquirrel` — DNS not resolving, port 80 blocked at firewall, or Let's Encrypt rate-limited (try again in 1h). |
 | `prisma migrate deploy` errors at startup | Inspect `entrypoint.sh` output in `docker compose logs app`. Manually run `docker compose exec app npx prisma migrate status`. |
 | OAuth redirect_uri_mismatch | The Google Console redirect URI doesn't match `https://gonesquirrel.nilegrowthworks.com/api/calendar/google`. |
 
 ## Files this deploy uses
 
-- [docker-compose.prod.yml](../docker-compose.prod.yml) — production stack
-- [Caddyfile](../Caddyfile) — reverse proxy + auto-SSL
+- [docker-compose.prod.yml](../docker-compose.prod.yml) — production stack (joins existing `root_default` network so Traefik can route)
 - [.env.production.example](../.env.production.example) — env template
 - [scripts/deploy.sh](../scripts/deploy.sh) — manual SSH deploy
 - [scripts/backup-postgres.sh](../scripts/backup-postgres.sh) — daily pg_dump

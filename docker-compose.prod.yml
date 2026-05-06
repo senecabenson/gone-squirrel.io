@@ -11,6 +11,26 @@ services:
     restart: unless-stopped
     expose:
       - "3000"
+    networks:
+      - default
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=root_default"
+      - "traefik.http.routers.gonesquirrel.entrypoints=web,websecure"
+      - "traefik.http.routers.gonesquirrel.rule=Host(`gonesquirrel.nilegrowthworks.com`)"
+      - "traefik.http.routers.gonesquirrel.tls=true"
+      - "traefik.http.routers.gonesquirrel.tls.certresolver=mytlschallenge"
+      - "traefik.http.routers.gonesquirrel.middlewares=gonesquirrel@docker"
+      - "traefik.http.services.gonesquirrel.loadbalancer.server.port=3000"
+      - "traefik.http.middlewares.gonesquirrel.headers.SSLRedirect=true"
+      - "traefik.http.middlewares.gonesquirrel.headers.SSLHost=nilegrowthworks.com"
+      - "traefik.http.middlewares.gonesquirrel.headers.STSSeconds=315360000"
+      - "traefik.http.middlewares.gonesquirrel.headers.STSIncludeSubdomains=true"
+      - "traefik.http.middlewares.gonesquirrel.headers.STSPreload=true"
+      - "traefik.http.middlewares.gonesquirrel.headers.forceSTSHeader=true"
+      - "traefik.http.middlewares.gonesquirrel.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.gonesquirrel.headers.browserXSSFilter=true"
 
   db:
     image: postgres:16-alpine
@@ -26,21 +46,14 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    networks:
+      - default
 
-  caddy:
-    image: caddy:2-alpine
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - app
-    restart: unless-stopped
+networks:
+  default:
+  traefik:
+    external: true
+    name: root_default
 
 volumes:
   postgres_data:
-  caddy_data:
-  caddy_config:
