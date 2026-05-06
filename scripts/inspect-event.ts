@@ -28,6 +28,7 @@ if (!userId || !eventId) {
   console.log("status:", r.data.status);
   console.log("start:", r.data.start?.dateTime);
   console.log("end:", r.data.end?.dateTime);
+  console.log("extProps.private:", JSON.stringify(r.data.extendedProperties?.private));
 })().catch((e) => {
   console.error(e);
   process.exit(1);

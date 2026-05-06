@@ -174,7 +174,47 @@ async function pushOne(
     }
   }
 
-  // Insert fresh event.
+  // Look-before-insert: an event tagged with this taskId may already exist
+  // (concurrent insert, crashed retry that succeeded in GCal but failed to
+  // persist googleEventId). Adopt it instead of creating a duplicate.
+  try {
+    const existing = await client.events.list({
+      calendarId,
+      privateExtendedProperty: [`taskId=${task.id}`],
+      showDeleted: false,
+      singleEvents: true,
+      maxResults: 5,
+    });
+    const adopt = (existing.data.items ?? []).find((e) => !!e.id);
+    if (adopt?.id) {
+      await prisma.task.update({
+        where: { id: task.id },
+        data: { googleEventId: adopt.id },
+      });
+      await client.events.patch({
+        calendarId,
+        eventId: adopt.id,
+        requestBody: {
+          summary: isCompleted ? strikethrough(task.title) : task.title,
+          start,
+          end,
+          colorId: isCompleted ? COMPLETED_COLOR_ID : null,
+        },
+      });
+      return;
+    }
+  } catch (err: unknown) {
+    logger.warn(
+      "look-before-insert events.list failed; proceeding to insert",
+      {
+        taskId: task.id,
+        error: err instanceof Error ? err.message : String(err),
+      },
+      LOG_SOURCE
+    );
+  }
+
+  // Insert fresh event tagged with taskId so future syncs can find it.
   const created = await client.events.insert({
     calendarId,
     requestBody: {
@@ -183,6 +223,7 @@ async function pushOne(
       start,
       end,
       colorId: isCompleted ? COMPLETED_COLOR_ID : undefined,
+      extendedProperties: { private: { taskId: task.id } },
     },
   });
   const eventId = created.data.id;
