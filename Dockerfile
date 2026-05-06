@@ -23,7 +23,7 @@ FROM base AS builder
 WORKDIR /app
 COPY . .
 COPY package*.json ./
-RUN npm ci --include=dev --legacy-peer-deps --ignore-scripts
+RUN HUSKY=0 npm ci --include=dev --legacy-peer-deps
 RUN npm run prisma:generate
 RUN npm run build
 
