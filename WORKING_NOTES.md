@@ -200,3 +200,26 @@ in 4 days.
   5. README rewrite per plan (drop NitroClaw/EliteCoders/SaaS sections, add brief framing + ADHD-tuned highlights + Quick start + OAuth setup + License)
   6. Verify (type-check + build + grep dead patterns) + commit + push to origin/main
   - Time-box: ~2-3h. After this lands, decide Sprint 2 (Now Mode rebuild) vs Sprint 3 (ClickUp MVP).
+
+---
+
+## 2026-05-06 — GCal push verify on `main` + branch prune
+
+- **Phase:** Post-rebrand cleanup; verify the GCal push feature shipped via `8567b03` snapshot still works on `main`.
+- **Did today:**
+  - Confirmed `oldfork/task-gcal-push` content already lives on `main`. Orphan-history snapshot `8567b03` absorbed `f8b97f6` (`google-task-sync.ts`, route hooks, prisma fields, `scripts/list-task-events.ts`). No merge needed; the only diff was a transparency-field gap I initially misread — main has it AND its migration `20260505141204_add_calendar_event_transparency`; the branch is the side missing both.
+  - Pre-flight: `prisma migrate status` clean (37 migrations applied). `npm run type-check` + `npm run build` both green.
+  - Live verify on `main` via Playwright + DB + GCal API (script `scripts/list-task-events.ts` + new `scripts/inspect-event.ts`), user-driven from senecacbenson@gmail.com:
+    - Step 1 cold push ✓ — POST new task `GCal Verify 2026-05-06`, Auto-schedule populated `googleEventId=5a291ov2qbvh4v0h3akl73h7dk`, event verified live in GCal at expected start/end (PDT alignment).
+    - Step 2 reschedule ✓ — PUT duration 30→60, rerun Auto-schedule. Same `googleEventId`, end time extended +30 min, no duplicate.
+    - Step 3 unschedule ✓ — PUT `scheduledStart=null, scheduledEnd=null`. DB nulled `googleEventId`, GCal event deleted. (Note: setting `isAutoScheduled=false` alone does NOT delete the event — sync delete branch keys off `!hasSchedule`.)
+    - Step 4 complete ✓ — re-armed with new event `2impdrbiv7ogrefrkb1oml2aas`, PUT `status=completed`. GCal summary became `G̶C̶a̶l̶ ̶V̶e̶r̶i̶f̶y̶ ̶2̶0̶2̶6̶-̶0̶5̶-̶0̶6̶`, `colorId=8` (gray), `status=confirmed` (event preserved).
+    - Step 5 single-task PUT title ✓ — PUT `status=todo` then `title=Renamed Verify`. GCal summary updated to plain "Renamed Verify", colorId cleared, same eventId.
+    - Bonus DELETE ✓ — DELETE task removed both DB row and GCal event.
+    - Step 6 stale calendar recovery — deferred (destructive on Seneca's calendar; verifiable on demand).
+    - Step 7 phone visibility — deferred (manual user check on phone Google Calendar app).
+    - Step 8 failure isolation — deferred (would need to revoke OAuth scope / disconnect; risky during Phase 3).
+  - Frictions captured (see FRICTIONS.md): page `<title>` still says "FluidCalendar" post-rebrand; pre-existing duplicate events in dedicated calendar (`Test 1`, `High energy 1`) likely from past sync regression; PUT response returns pre-sync state; isAutoScheduled toggle alone doesn't unschedule.
+- **Working:** GCal push feature live-verified on `main`. Build + type-check green. Phase 3 daily-driver use unaffected.
+- **Broken:** None new. Frictions documented but non-blocking.
+- **Next concrete task:** Prune `oldfork/task-gcal-push` (already redundant with `main`), update `project_fluid_calendar.md` memory, then choose between Sprint 2 (Now Mode) and Sprint 3 (ClickUp). Page-title rebrand + duplicate-event audit are small post-tasks that can land any time.
