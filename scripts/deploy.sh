@@ -20,8 +20,8 @@ git pull --ff-only
 echo "==> docker compose build + up"
 docker compose -f docker-compose.prod.yml up -d --build
 
-echo "==> wait 5s for app warmup"
-sleep 5
+echo "==> wait 15s for app warmup"
+sleep 15
 
 echo "==> docker compose ps"
 docker compose -f docker-compose.prod.yml ps
