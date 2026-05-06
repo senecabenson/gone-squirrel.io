@@ -10,11 +10,15 @@ if [ ! -f .env.production ]; then
   exit 1
 fi
 
+# Symlink so plain `docker compose ...` commands (ps, down, logs) pick up
+# variable interpolation without needing --env-file every time.
+ln -sf .env.production .env
+
 echo "==> git pull"
 git pull --ff-only
 
 echo "==> docker compose build + up"
-docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml up -d --build
 
 echo "==> wait 5s for app warmup"
 sleep 5

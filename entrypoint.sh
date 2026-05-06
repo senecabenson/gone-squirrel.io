@@ -12,13 +12,13 @@ while ! nc -z $PG_HOST $PG_PORT; do
 done
 echo "Database is ready!"
 
-# Generate Prisma Client
-echo "Generating Prisma Client..."
-npx --yes prisma generate
-
-# Run database migrations
+# Run database migrations.
+# Production image only ships node_modules/.prisma (the generated client),
+# not the prisma CLI. `npx --yes prisma` would grab the latest (currently
+# 7.x) which rejects our v6 schema.prisma. Pin the version to match
+# package.json so future Prisma majors don't silently break boot.
 echo "Running database migrations..."
-npx --yes prisma migrate deploy
+npx --yes prisma@6.3.1 migrate deploy
 
 # Start the application
 echo "Starting the application..."
