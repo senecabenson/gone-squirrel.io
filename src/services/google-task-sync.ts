@@ -5,7 +5,7 @@ import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 
 const LOG_SOURCE = "google-task-sync";
-const TASK_CALENDAR_NAME = "FluidCalendar Tasks";
+const TASK_CALENDAR_NAME = "GoneSquirrel Tasks";
 const COMPLETED_COLOR_ID = "8"; // graphite/gray in Google Calendar
 const STRIKE_COMBINING = "̶"; // long stroke overlay
 

@@ -6,8 +6,8 @@ import { SignInForm } from "@/components/auth/SignInForm";
 import { getAuthOptions } from "@/lib/auth/auth-options";
 
 export const metadata = {
-  title: "Sign In | FluidCalendar",
-  description: "Sign in to your FluidCalendar account",
+  title: "Sign In | GoneSquirrel",
+  description: "Sign in to your GoneSquirrel account",
 };
 
 export default async function SignInPage() {

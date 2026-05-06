@@ -737,7 +737,7 @@ export function TaskSyncSettings() {
     return (
       <SettingRow
         label="Task Lists"
-        description="Map external task lists to FluidCalendar projects"
+        description="Map external task lists to GoneSquirrel projects"
       >
         <div className="space-y-4">
           {error && (

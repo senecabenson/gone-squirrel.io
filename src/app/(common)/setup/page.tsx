@@ -7,8 +7,8 @@ import { checkSetupStatus } from "@/lib/setup-actions";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Setup FluidCalendar",
-  description: "Set up your FluidCalendar admin account",
+  title: "Setup | GoneSquirrel",
+  description: "Set up your GoneSquirrel admin account",
 };
 
 export default async function SetupPage() {
