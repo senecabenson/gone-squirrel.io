@@ -223,3 +223,32 @@ in 4 days.
 - **Working:** GCal push feature live-verified on `main`. Build + type-check green. Phase 3 daily-driver use unaffected.
 - **Broken:** None new. Frictions documented but non-blocking.
 - **Next concrete task:** Prune `oldfork/task-gcal-push` (already redundant with `main`), update `project_fluid_calendar.md` memory, then choose between Sprint 2 (Now Mode) and Sprint 3 (ClickUp). Page-title rebrand + duplicate-event audit are small post-tasks that can land any time.
+
+---
+
+## 2026-05-06 — Rebrand polish, orphan-fix, VPS deploy live
+
+- **Phase:** Post-Phase-1 polish + Phase 2 deploy.
+- **Did today (after morning GCal verify):**
+  - **Rebrand finish (`16ad162`).** Sprint 1 left `FluidCalendar` strings in `src/lib/utils/page-title.ts` (central source for all browser-tab titles), `src/app/error.tsx` `document.title`, signin/setup/reset-password metadata, `TaskSyncSettings` description, password-reset email template + sender display name, and `TASK_CALENDAR_NAME` constant. All swapped to `GoneSquirrel`. `/focus` tab title relabelled to `Now` to match the nav. Renamed Seneca's live GCal calendar `FluidCalendar Tasks` → `GoneSquirrel Tasks` via a new `scripts/rename-task-calendar.ts` (calendars.patch).
+  - **Friction cleanup.** Augmented `scripts/audit-task-events.ts` to list/delete orphan events. Found 2 orphans (`Test 1`, `High energy 1`) on Seneca's dedicated calendar — historic regression — deleted on his approval.
+  - **CI hygiene.** Removed `.github/workflows/docker-publish.yml{,.old}` (`5ed8eea`) — was pushing to upstream's `eibrahim/fluid-calendar` Docker Hub, failing every push and emailing Seneca. Removed `.github/FUNDING.yml` (`5482b50`) — pointed sponsor button at upstream maintainer.
+  - **Orphan root-cause fix (`18482d9`).** `pushOne` in `src/services/google-task-sync.ts` now sets `extendedProperties.private.taskId = task.id` on insert, AND look-before-insert: queries `events.list({ privateExtendedProperty: taskId=<id> })`. If a tagged event already exists (concurrent insert or crashed retry), adopts it instead of inserting a duplicate. `audit-task-events.ts` gained a `backfill` mode that tags historical events + dedupes per task. `inspect-event.ts` now prints extProps. Verified: 2 parallel `POST /api/tasks/schedule-all` for a fresh task = 1 GCal event; backfill on Seneca's calendar tagged 7 events, 0 dupes, 0 true orphans.
+  - **VPS deploy live (`920a290` + a chain of fixes through `eaec108`).** Target: `gonesquirrel.nilegrowthworks.com` on Hostinger Ubuntu VPS (`31.97.145.236`). DNS = Porkbun A record. Repo at `/opt/gonesquirrel`.
+    - Initial plan (Caddy in compose) had to swap to **traefik labels** (`0bd3c75`) — VPS already runs `root-traefik-1` fronting n8n / etc on 80/443. New compose joins external `root_default` network and uses traefik docker labels matching the n8n pattern (entrypoints `web,websecure`, certresolver `mytlschallenge`). Caddyfile deleted.
+    - Dockerfile fix chain (`9612270`, `2a5e664`, `9489cc3`): swap `prisma:generate` BEFORE `next build`; add `--include=dev` so eslint + `@types/canvas-confetti` install (NODE_ENV=production in base inheritance was skipping devDeps); drop `--ignore-scripts` and add `HUSKY=0` so bcrypt's prebuilt-binary postinstall fires.
+    - Entrypoint pinned `prisma@6.3.1` for migrate-deploy at boot (`14bddcf`) — production image only ships `node_modules/.prisma/client`, so `npx prisma` was pulling 7.x latest which rejects the v6 datasource block. Migrations had to be applied manually first time via `npx -y prisma@6.3.1 migrate deploy` from inside the running container.
+    - `deploy.sh` now `ln -sf .env.production .env` so plain `docker compose` commands stop printing `POSTGRES_USER not set` interpolation warnings (`14bddcf`). Warmup sleep bumped 5s → 15s to stop false-alarm 502 health check (`eaec108`).
+  - Google OAuth callback updated in Google Cloud Console to `https://gonesquirrel.nilegrowthworks.com/api/calendar/google` (Seneca did this from his side); reconnected GCal from `/settings#integrations`.
+- **Working:**
+  - https://gonesquirrel.nilegrowthworks.com live with real Let's Encrypt cert (R13, valid Aug 4 2026).
+  - Local dev still works (host Next on :3000, Postgres docker on :5432, .env at repo root).
+  - Both bug-1 + bug-2 + GCal push idempotency on prod from first deploy.
+- **Broken:**
+  - First deploy required a manual `prisma migrate deploy` rescue because the entrypoint's old `npx prisma` pulled v7. Subsequent deploys auto-migrate via the pinned 6.3.1 entrypoint. Document this if a teammate ever bootstraps from scratch.
+  - Local folder still `~/Coding/fluid-calendar` (cosmetic).
+  - Phase 3 friction journal still under target (now ~7/15) — bias was deploy work today.
+- **Next concrete task:**
+  1. Confirm autoscheduler still pushes correctly to GCal from the prod app (live test with a real task).
+  2. Decide whether to backfill prod Postgres with selected rows from local (or just start fresh).
+  3. Resume Phase 3 daily-driver use through 2026-05-17. Day 14 gate then decides Sprint 2 (Now Mode) vs Sprint 3 (ClickUp MVP).
