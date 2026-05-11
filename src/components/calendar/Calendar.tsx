@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import {
   PiCaretLeftBold,
@@ -26,6 +26,7 @@ import {
   useCalendarUIStore,
   useViewStore,
 } from "@/store/calendar";
+import { useSettingsStore } from "@/store/settings";
 import { useTaskStore } from "@/store/task";
 
 import { CalendarEvent, CalendarFeed } from "@/types/calendar";
@@ -50,6 +51,12 @@ export function Calendar({
   const { isSidebarOpen, setSidebarOpen, isHydrated } = useCalendarUIStore();
   const { scheduleAllTasks } = useTaskStore();
   const { setFeeds, setEvents } = useCalendarStore();
+  const { integrations } = useSettingsStore();
+  const googleAutoSync =
+    integrations.googleCalendar.enabled &&
+    integrations.googleCalendar.autoSync;
+  const googleSyncMinutes = integrations.googleCalendar.syncInterval;
+  const lastPullRef = useRef<number>(0);
 
   useEffect(() => {
     if (initialFeeds.length > 0) setFeeds(initialFeeds);
@@ -59,6 +66,48 @@ export function Calendar({
     }
     useTaskStore.getState().fetchTasks();
   }, [initialFeeds, initialEvents, setFeeds, setEvents]);
+
+  // Two-way pull: keep the UI in sync with external Google Calendar changes
+  // (mobile, web, other MCPs). Settings already exposes the toggle/interval
+  // but the timer only starts when a user *toggles* the setting — never on
+  // mount. So we own the boot-time interval here, plus refresh on focus.
+  useEffect(() => {
+    const MIN_GAP_MS = 30_000;
+    let cancelled = false;
+
+    const pull = async () => {
+      if (cancelled) return;
+      if (typeof document !== "undefined" && document.hidden) return;
+      const now = Date.now();
+      if (now - lastPullRef.current < MIN_GAP_MS) return;
+      lastPullRef.current = now;
+      try {
+        await useCalendarStore.getState().syncAllFeeds();
+      } catch (e) {
+        // syncAllFeeds already sets error state in the store; just log.
+        console.error("syncAllFeeds (background) failed", e);
+      }
+    };
+
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    if (googleAutoSync && googleSyncMinutes > 0) {
+      intervalId = setInterval(pull, googleSyncMinutes * 60 * 1000);
+    }
+
+    const onVisible = () => {
+      if (!document.hidden) pull();
+    };
+    const onFocus = () => pull();
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      cancelled = true;
+      if (intervalId !== null) clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [googleAutoSync, googleSyncMinutes]);
 
   const handlePrev = () => {
     if (view === "month" || view === "multiMonth") {
