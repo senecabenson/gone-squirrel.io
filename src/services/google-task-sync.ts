@@ -317,6 +317,20 @@ export async function deleteTaskGoogleEvent(
   }
 }
 
+/**
+ * Stub for chunk GCal event deletion. Filled in by Task 12.
+ * Used by /api/focus/complete-parent to clean up GCal events when a parent task
+ * is closed early.
+ */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+export async function deleteChunkEvents(
+  _chunks: Array<{ id: string; googleEventId: string | null }>,
+  _userId: string,
+): Promise<void> {
+  // Task 12: implement real OAuth-based event deletion.
+}
+/* eslint-enable @typescript-eslint/no-unused-vars */
+
 export async function syncSingleTaskToGoogle(
   userId: string,
   taskId: string
