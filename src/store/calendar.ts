@@ -6,6 +6,21 @@ import { persist } from "zustand/middleware";
 import { newDate, normalizeAllDayDate } from "@/lib/date-utils";
 import { DEFAULT_TASK_COLOR } from "@/lib/task-utils";
 
+async function describeApiFailure(
+  provider: string,
+  response: Response,
+): Promise<string> {
+  let detail = "";
+  try {
+    detail = (await response.text()).slice(0, 500);
+  } catch {
+    // ignore
+  }
+  return `Failed to ${provider} (${response.status}${
+    detail ? `: ${detail}` : ""
+  })`;
+}
+
 import { useTaskStore } from "@/store/task";
 
 import {
@@ -432,7 +447,9 @@ export const useCalendarStore = create<CalendarStore>()((set, get) => ({
         });
 
         if (!response.ok) {
-          throw new Error("Failed to add event to Google Calendar");
+          throw new Error(
+            await describeApiFailure("add event to Google Calendar", response),
+          );
         }
 
         // Reload from database to get the latest state
@@ -453,7 +470,9 @@ export const useCalendarStore = create<CalendarStore>()((set, get) => ({
         });
 
         if (!response.ok) {
-          throw new Error("Failed to add event to Outlook Calendar");
+          throw new Error(
+            await describeApiFailure("add event to Outlook Calendar", response),
+          );
         }
 
         // Reload from database to get the latest state
@@ -474,7 +493,9 @@ export const useCalendarStore = create<CalendarStore>()((set, get) => ({
         });
 
         if (!response.ok) {
-          throw new Error("Failed to add event to CalDAV Calendar");
+          throw new Error(
+            await describeApiFailure("add event to CalDAV Calendar", response),
+          );
         }
 
         // Reload from database to get the latest state
@@ -512,7 +533,12 @@ export const useCalendarStore = create<CalendarStore>()((set, get) => ({
         });
 
         if (!response.ok) {
-          throw new Error("Failed to update event in Google Calendar");
+          throw new Error(
+            await describeApiFailure(
+              "update event in Google Calendar",
+              response,
+            ),
+          );
         }
 
         // Reload from database to get the latest state
@@ -532,7 +558,12 @@ export const useCalendarStore = create<CalendarStore>()((set, get) => ({
         });
 
         if (!response.ok) {
-          throw new Error("Failed to update event in Outlook Calendar");
+          throw new Error(
+            await describeApiFailure(
+              "update event in Outlook Calendar",
+              response,
+            ),
+          );
         }
 
         // Reload from database to get the latest state
@@ -552,7 +583,12 @@ export const useCalendarStore = create<CalendarStore>()((set, get) => ({
         });
 
         if (!response.ok) {
-          throw new Error("Failed to update event in CalDAV Calendar");
+          throw new Error(
+            await describeApiFailure(
+              "update event in CalDAV Calendar",
+              response,
+            ),
+          );
         }
 
         // Reload from database to get the latest state
@@ -579,7 +615,6 @@ export const useCalendarStore = create<CalendarStore>()((set, get) => ({
       const feed = get().feeds.find((f) => f.id === event.feedId);
       if (!feed) return;
 
-      // For Google Calendar feeds, use the Google Calendar API
       if (feed.type === "GOOGLE") {
         const response = await fetch(`/api/calendar/google/events`, {
           method: "DELETE",
@@ -588,10 +623,14 @@ export const useCalendarStore = create<CalendarStore>()((set, get) => ({
         });
 
         if (!response.ok) {
-          throw new Error("Failed to delete event from Google Calendar");
+          throw new Error(
+            await describeApiFailure(
+              "delete event from Google Calendar",
+              response,
+            ),
+          );
         }
       } else if (feed.type === "OUTLOOK") {
-        // For Outlook Calendar feeds, use the Outlook Calendar API
         const response = await fetch(`/api/calendar/outlook/events`, {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
@@ -599,10 +638,14 @@ export const useCalendarStore = create<CalendarStore>()((set, get) => ({
         });
 
         if (!response.ok) {
-          throw new Error("Failed to delete event from Outlook Calendar");
+          throw new Error(
+            await describeApiFailure(
+              "delete event from Outlook Calendar",
+              response,
+            ),
+          );
         }
       } else if (feed.type === "CALDAV") {
-        // For CalDAV Calendar feeds, use the CalDAV Calendar API
         const response = await fetch(`/api/calendar/caldav/events`, {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
@@ -610,16 +653,22 @@ export const useCalendarStore = create<CalendarStore>()((set, get) => ({
         });
 
         if (!response.ok) {
-          throw new Error("Failed to delete event from CalDAV Calendar");
+          throw new Error(
+            await describeApiFailure(
+              "delete event from CalDAV Calendar",
+              response,
+            ),
+          );
         }
       } else {
-        // For other calendars, use the existing API
         const response = await fetch(`/api/events/${id}`, {
           method: "DELETE",
         });
 
         if (!response.ok) {
-          throw new Error("Failed to delete event from database");
+          throw new Error(
+            await describeApiFailure("delete event from database", response),
+          );
         }
       }
 

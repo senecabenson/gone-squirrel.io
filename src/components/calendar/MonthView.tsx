@@ -9,6 +9,7 @@ import type { DateSelectArg } from "@fullcalendar/core";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import FullCalendar from "@fullcalendar/react";
+import { toast } from "sonner";
 
 import { TaskModal } from "@/components/tasks/TaskModal";
 
@@ -213,16 +214,30 @@ export function MonthView({ currentDate, onDateClick }: MonthViewProps) {
 
     if (isTask) {
       if (confirm("Are you sure you want to delete this task?")) {
-        await useTaskStore.getState().deleteTask(quickViewItem.id);
-        handleQuickViewClose();
+        try {
+          await useTaskStore.getState().deleteTask(quickViewItem.id);
+          handleQuickViewClose();
+        } catch (e) {
+          console.error("deleteTask failed", e);
+          toast.error(
+            e instanceof Error ? e.message : "Failed to delete task",
+          );
+        }
       }
     } else {
       if (confirm("Are you sure you want to delete this event?")) {
-        await removeEvent(
-          quickViewItem.id,
-          quickViewItem.isRecurring ? "series" : "single"
-        );
-        handleQuickViewClose();
+        try {
+          await removeEvent(
+            quickViewItem.id,
+            quickViewItem.isRecurring ? "series" : "single",
+          );
+          handleQuickViewClose();
+        } catch (e) {
+          console.error("removeEvent failed", e);
+          toast.error(
+            e instanceof Error ? e.message : "Failed to delete event",
+          );
+        }
       }
     }
   };

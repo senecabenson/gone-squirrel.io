@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -259,7 +260,9 @@ export function EventModal({
       onClose();
     } catch (error) {
       console.error("Failed to save event:", error);
-      alert(error instanceof Error ? error.message : "Failed to save event");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to save event",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -275,7 +278,9 @@ export function EventModal({
       onClose();
     } catch (error) {
       console.error("Failed to delete event:", error);
-      alert(error instanceof Error ? error.message : "Failed to delete event");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to delete event",
+      );
     } finally {
       setIsSubmitting(false);
     }

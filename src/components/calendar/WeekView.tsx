@@ -9,6 +9,7 @@ import type { DateSelectArg } from "@fullcalendar/core";
 import interactionPlugin from "@fullcalendar/interaction";
 import FullCalendar from "@fullcalendar/react";
 import timeGridPlugin from "@fullcalendar/timegrid";
+import { toast } from "sonner";
 
 import { TaskModal } from "@/components/tasks/TaskModal";
 
@@ -225,19 +226,31 @@ export function WeekView({ currentDate, onDateClick }: WeekViewProps) {
     if (!quickViewItem) return;
 
     if (isTask) {
-      // It's a task
       if (confirm("Are you sure you want to delete this task?")) {
-        await useTaskStore.getState().deleteTask(quickViewItem.id);
-        handleQuickViewClose();
+        try {
+          await useTaskStore.getState().deleteTask(quickViewItem.id);
+          handleQuickViewClose();
+        } catch (e) {
+          console.error("deleteTask failed", e);
+          toast.error(
+            e instanceof Error ? e.message : "Failed to delete task",
+          );
+        }
       }
     } else {
-      // It's an event
       if (confirm("Are you sure you want to delete this event?")) {
-        await removeEvent(
-          quickViewItem.id,
-          quickViewItem.isRecurring ? "series" : "single"
-        );
-        handleQuickViewClose();
+        try {
+          await removeEvent(
+            quickViewItem.id,
+            quickViewItem.isRecurring ? "series" : "single",
+          );
+          handleQuickViewClose();
+        } catch (e) {
+          console.error("removeEvent failed", e);
+          toast.error(
+            e instanceof Error ? e.message : "Failed to delete event",
+          );
+        }
       }
     }
   };
