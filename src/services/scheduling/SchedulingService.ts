@@ -230,16 +230,16 @@ export class SchedulingService {
     return allTasks;
   }
 
-  private async scheduleTask(
+  /**
+   * Find the best available slot for a task without persisting anything.
+   * Searches scheduling windows in order and returns the first window with a slot.
+   * Returns the best-scored slot from that window, or null if no windows have slots.
+   */
+  private async findSlotForTask(
     task: Task,
     timeSlotManager: TimeSlotManager,
     userId: string
-  ): Promise<Task | null> {
-    const taskStart = this.startMetric("scheduleTask", {
-      taskId: task.id,
-      title: task.title,
-    });
-
+  ): Promise<{ start: Date; end: Date; score: number } | null> {
     const now = newDate();
     const windows = [
       { days: 7, label: "1 week" },
@@ -261,50 +261,83 @@ export class SchedulingService {
         userId
       );
 
+      this.endMetric("tryWindow", windowStart);
+
       if (availableSlots.length > 0) {
         const bestSlot = availableSlots[0]; // Already sorted by score
-
-        const updateStart = this.startMetric("updateTask", {
-          taskId: task.id,
-          slotStart: bestSlot.start,
-          slotEnd: bestSlot.end,
-        });
-
-        // Update the task with the selected slot
-        const updatedTask = await prisma.task.update({
-          where: { id: task.id },
-          data: {
-            scheduledStart: bestSlot.start,
-            scheduledEnd: bestSlot.end,
-            isAutoScheduled: true,
-            duration: task.duration || DEFAULT_TASK_DURATION,
-            scheduleScore: bestSlot.score,
-            userId,
-          },
-        });
-
-        // Add this newly scheduled task to the list of conflicts
-        // so it won't be available for other tasks
-        await timeSlotManager.addScheduledTaskConflict(updatedTask);
-
-        this.endMetric("updateTask", updateStart);
-        this.endMetric("tryWindow", windowStart);
-        this.endMetric("scheduleTask", taskStart);
-        return updatedTask;
-      } else {
-        logger.debug(
-          `No available slots found in ${window.label} window`,
-          {
-            windowLabel: window.label,
-          },
-          LOG_SOURCE
-        );
+        return {
+          start: bestSlot.start,
+          end: bestSlot.end,
+          score: bestSlot.score,
+        };
       }
 
-      this.endMetric("tryWindow", windowStart);
+      logger.debug(
+        `No available slots found in ${window.label} window`,
+        { windowLabel: window.label },
+        LOG_SOURCE
+      );
     }
 
-    this.endMetric("scheduleTask", taskStart);
     return null;
+  }
+
+  /**
+   * Public preview: find the best slot for a task without persisting it.
+   * Used by Now Mode "finish later" preview flow.
+   */
+  async previewSlot(
+    task: Task,
+    userId: string
+  ): Promise<{ start: Date; end: Date } | null> {
+    const timeSlotManager = this.getTimeSlotManager();
+    const slot = await this.findSlotForTask(task, timeSlotManager, userId);
+    if (!slot) return null;
+    return { start: slot.start, end: slot.end };
+  }
+
+  private async scheduleTask(
+    task: Task,
+    timeSlotManager: TimeSlotManager,
+    userId: string
+  ): Promise<Task | null> {
+    const taskStart = this.startMetric("scheduleTask", {
+      taskId: task.id,
+      title: task.title,
+    });
+
+    const slot = await this.findSlotForTask(task, timeSlotManager, userId);
+
+    if (!slot) {
+      this.endMetric("scheduleTask", taskStart);
+      return null;
+    }
+
+    const updateStart = this.startMetric("updateTask", {
+      taskId: task.id,
+      slotStart: slot.start,
+      slotEnd: slot.end,
+    });
+
+    // Update the task with the selected slot
+    const updatedTask = await prisma.task.update({
+      where: { id: task.id },
+      data: {
+        scheduledStart: slot.start,
+        scheduledEnd: slot.end,
+        isAutoScheduled: true,
+        duration: task.duration || DEFAULT_TASK_DURATION,
+        scheduleScore: slot.score,
+        userId,
+      },
+    });
+
+    // Add this newly scheduled task to the list of conflicts
+    // so it won't be available for other tasks
+    await timeSlotManager.addScheduledTaskConflict(updatedTask);
+
+    this.endMetric("updateTask", updateStart);
+    this.endMetric("scheduleTask", taskStart);
+    return updatedTask;
   }
 }
