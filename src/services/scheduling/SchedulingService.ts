@@ -296,6 +296,31 @@ export class SchedulingService {
     return { start: slot.start, end: slot.end };
   }
 
+  /**
+   * Find the best slot for a TaskChunk and persist scheduledStart/scheduledEnd.
+   * Uses the parent task's metadata but overrides duration with the chunk's durationMin.
+   */
+  async scheduleChunk(
+    chunk: { id: string; taskId: string; durationMin: number },
+    userId: string
+  ): Promise<{ start: Date; end: Date } | null> {
+    const parent = await prisma.task.findUnique({ where: { id: chunk.taskId } });
+    if (!parent) return null;
+
+    const slot = await this.previewSlot(
+      { ...parent, duration: chunk.durationMin } as Parameters<typeof this.previewSlot>[0],
+      userId
+    );
+    if (!slot) return null;
+
+    await prisma.taskChunk.update({
+      where: { id: chunk.id },
+      data: { scheduledStart: slot.start, scheduledEnd: slot.end },
+    });
+
+    return slot;
+  }
+
   private async scheduleTask(
     task: Task,
     timeSlotManager: TimeSlotManager,
