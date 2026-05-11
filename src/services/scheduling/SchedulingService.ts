@@ -186,25 +186,43 @@ export class SchedulingService {
 
     const updatedTasks: Task[] = [];
 
-    // Schedule each task
+    // Schedule each task. When a task has todo TaskChunk rows, schedule each
+    // chunk independently via scheduleChunk (sharing the timeSlotManager so
+    // chunks don't overlap). Otherwise fall through to the legacy whole-task
+    // scheduling path.
     for (const task of sortedTasks) {
       const taskStart = this.startMetric("scheduleIndividualTask", {
         taskId: task.id,
         title: task.title,
       });
 
-      const taskWithDuration = {
-        ...task,
-        duration: task.duration || DEFAULT_TASK_DURATION,
-      };
+      const chunks = await prisma.taskChunk.findMany({
+        where: { taskId: task.id, status: "todo" },
+        orderBy: { chunkIndex: "asc" },
+      });
 
-      const scheduledTask = await this.scheduleTask(
-        taskWithDuration,
-        timeSlotManager,
-        userId
-      );
-      if (scheduledTask) {
-        updatedTasks.push(scheduledTask);
+      if (chunks.length > 0) {
+        for (const c of chunks) {
+          await this.scheduleChunk(
+            { id: c.id, taskId: c.taskId, durationMin: c.durationMin },
+            userId,
+            timeSlotManager
+          );
+        }
+      } else {
+        const taskWithDuration = {
+          ...task,
+          duration: task.duration || DEFAULT_TASK_DURATION,
+        };
+
+        const scheduledTask = await this.scheduleTask(
+          taskWithDuration,
+          timeSlotManager,
+          userId
+        );
+        if (scheduledTask) {
+          updatedTasks.push(scheduledTask);
+        }
       }
 
       this.endMetric("scheduleIndividualTask", taskStart);
@@ -299,19 +317,47 @@ export class SchedulingService {
   /**
    * Find the best slot for a TaskChunk and persist scheduledStart/scheduledEnd.
    * Uses the parent task's metadata but overrides duration with the chunk's durationMin.
+   *
+   * When a shared `timeSlotManager` is provided, this reuses it (and registers the
+   * chosen slot as a conflict) so consecutive chunks within the same batch don't
+   * double-book. When omitted, falls through to `previewSlot` which builds its own
+   * manager — appropriate for single-chunk API callers like /api/focus/finish-later.
    */
   async scheduleChunk(
     chunk: { id: string; taskId: string; durationMin: number },
-    userId: string
+    userId: string,
+    timeSlotManager?: TimeSlotManager
   ): Promise<{ start: Date; end: Date } | null> {
     const parent = await prisma.task.findUnique({ where: { id: chunk.taskId } });
     if (!parent) return null;
 
-    const slot = await this.previewSlot(
-      { ...parent, duration: chunk.durationMin } as Parameters<typeof this.previewSlot>[0],
-      userId
-    );
-    if (!slot) return null;
+    const taskForSearch = {
+      ...parent,
+      duration: chunk.durationMin,
+    } as Task;
+
+    let slot: { start: Date; end: Date } | null;
+
+    if (timeSlotManager) {
+      const found = await this.findSlotForTask(
+        taskForSearch,
+        timeSlotManager,
+        userId
+      );
+      if (!found) return null;
+      slot = { start: found.start, end: found.end };
+
+      // Register the chosen slot as a conflict so subsequent searches
+      // (e.g., the next chunk in the same task) don't double-book it.
+      await timeSlotManager.addScheduledTaskConflict({
+        ...taskForSearch,
+        scheduledStart: found.start,
+        scheduledEnd: found.end,
+      } as Task);
+    } else {
+      slot = await this.previewSlot(taskForSearch, userId);
+      if (!slot) return null;
+    }
 
     await prisma.taskChunk.update({
       where: { id: chunk.id },
