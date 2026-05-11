@@ -170,36 +170,33 @@ export function createUTCMidnightDate(localDate: Date | null): Date | null {
 }
 
 /**
- * Creates a date for an all-day event, handling timezone issues
- * For all-day events, the date should be interpreted as local midnight
- * This prevents issues where all-day events appear on the wrong day due to timezone conversion
- * @param dateString The date string in ISO format (YYYY-MM-DD)
- * @returns Date object representing midnight (00:00:00) in local time for that day
+ * Creates a canonical Date for an all-day event from a YYYY-MM-DD string.
+ * Returns UTC midnight on the target day so the stored instant is identical
+ * regardless of the server's local TZ (Docker containers default to UTC,
+ * dev Macs are local — this kept all-day events drifting by one day).
+ * Pair with `normalizeAllDayDate` on the render side.
  */
 export function createAllDayDate(dateString: string): Date {
   if (!dateString) return new Date();
-
-  // For an all-day event, extract just the YYYY-MM-DD portion
   const [year, month, day] = dateString.split("T")[0].split("-").map(Number);
-
-  // Create a date at midnight local time for the specified day
-  // Use setHours(0,0,0,0) to ensure consistent midnight timing
-  const date = new Date(year, month - 1, day);
-  date.setHours(0, 0, 0, 0);
-  return date;
+  return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
 }
 
 /**
- * Normalizes a date for all-day event display
- * Ensures the date is set to local midnight and strips any time component
- * This helps prevent timezone-related display issues with all-day events
- * @param date The date to normalize
- * @returns Date object normalized to local midnight
+ * Normalizes a stored all-day Date for rendering. Reads UTC Y/M/D off the
+ * canonical instant and returns a Date at local midnight on that calendar
+ * day — what FullCalendar expects when `timeZone="local"`.
  */
 export function normalizeAllDayDate(date: Date): Date {
-  const normalizedDate = new Date(date);
-  normalizedDate.setHours(0, 0, 0, 0);
-  return normalizedDate;
+  return new Date(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate(),
+    0,
+    0,
+    0,
+    0,
+  );
 }
 
 /**

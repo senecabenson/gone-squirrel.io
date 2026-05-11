@@ -1,4 +1,9 @@
-import { newDateFromYMD, roundDateUp } from "../date-utils";
+import {
+  createAllDayDate,
+  newDateFromYMD,
+  normalizeAllDayDate,
+  roundDateUp,
+} from "../date-utils";
 
 describe("roundDateUp", () => {
   test("should round up to next 30 minutes by default", () => {
@@ -60,5 +65,42 @@ describe("roundDateUp", () => {
     expect(rounded.getFullYear()).toBe(2024);
     expect(rounded.getMonth()).toBe(2); // March
     expect(rounded.getDate()).toBe(29);
+  });
+});
+
+describe("createAllDayDate", () => {
+  test("produces UTC midnight on the target day (TZ-independent)", () => {
+    const d = createAllDayDate("2026-05-10");
+    expect(d.toISOString()).toBe("2026-05-10T00:00:00.000Z");
+  });
+
+  test("ignores trailing time portion in input", () => {
+    const d = createAllDayDate("2026-05-10T17:30:00");
+    expect(d.toISOString()).toBe("2026-05-10T00:00:00.000Z");
+  });
+
+  test("returns a Date for empty input (no throw)", () => {
+    expect(createAllDayDate("")).toBeInstanceOf(Date);
+  });
+});
+
+describe("normalizeAllDayDate", () => {
+  test("returns local midnight on the UTC calendar day of the input", () => {
+    // Canonical stored instant for Mother's Day 2026
+    const stored = new Date("2026-05-10T00:00:00.000Z");
+    const local = normalizeAllDayDate(stored);
+    expect(local.getFullYear()).toBe(2026);
+    expect(local.getMonth()).toBe(4); // May
+    expect(local.getDate()).toBe(10);
+    expect(local.getHours()).toBe(0);
+    expect(local.getMinutes()).toBe(0);
+  });
+
+  test("round-trip: createAllDayDate then normalizeAllDayDate preserves YMD", () => {
+    const canonical = createAllDayDate("2026-05-10");
+    const local = normalizeAllDayDate(canonical);
+    expect(local.getFullYear()).toBe(2026);
+    expect(local.getMonth()).toBe(4);
+    expect(local.getDate()).toBe(10);
   });
 });
