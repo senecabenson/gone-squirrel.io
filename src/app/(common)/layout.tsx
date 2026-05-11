@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 
 import { DndProvider } from "@/components/dnd/DndProvider";
+import { StickyPomodoroBanner } from "@/components/focus/StickyPomodoroBanner";
 import { AppShell } from "@/components/layout/AppShell";
 import { PrivacyProvider } from "@/components/providers/PrivacyProvider";
 import { SessionProvider } from "@/components/providers/SessionProvider";
@@ -74,6 +75,7 @@ export default function CommonLayout({
             onClose={() => setShortcutsOpen(false)}
           />
           <AppShell>
+            <StickyPomodoroBanner />
             <NotificationProvider>{children}</NotificationProvider>
           </AppShell>
           <Toaster />
