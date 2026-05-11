@@ -85,6 +85,30 @@ async function getOrCreateTaskCalendar(
 
 type GCalClient = Awaited<ReturnType<typeof getGoogleCalendarClient>>;
 
+interface UserCalendarContext {
+  client: GCalClient;
+  calendarId: string;
+  timeZone: string;
+}
+
+async function getUserCalendarContext(
+  userId: string
+): Promise<UserCalendarContext | null> {
+  const accountId = await getPrimaryGoogleAccountId(userId);
+  if (!accountId) {
+    logger.info(
+      "Skipping GCal operation: no connected Google account",
+      { userId },
+      LOG_SOURCE
+    );
+    return null;
+  }
+  const timeZone = await getUserTimeZone(userId);
+  const calendarId = await getOrCreateTaskCalendar(userId, accountId, timeZone);
+  const client = await getGoogleCalendarClient(accountId, userId);
+  return { client, calendarId, timeZone };
+}
+
 async function pushOne(
   task: Task,
   calendarId: string,
@@ -244,15 +268,10 @@ async function pushOne(
 export async function syncScheduledTasksToGoogle(
   userId: string
 ): Promise<void> {
-  const accountId = await getPrimaryGoogleAccountId(userId);
-  if (!accountId) {
-    logger.info(
-      "Skipping task→GCal push: no connected Google account",
-      { userId },
-      LOG_SOURCE
-    );
-    return;
-  }
+  const ctx = await getUserCalendarContext(userId);
+  if (!ctx) return;
+
+  const { client, calendarId, timeZone } = ctx;
 
   const tasks = await prisma.task.findMany({
     where: {
@@ -260,15 +279,6 @@ export async function syncScheduledTasksToGoogle(
       OR: [{ isAutoScheduled: true }, { googleEventId: { not: null } }],
     },
   });
-  if (tasks.length === 0) return;
-
-  const timeZone = await getUserTimeZone(userId);
-  const calendarId = await getOrCreateTaskCalendar(
-    userId,
-    accountId,
-    timeZone
-  );
-  const client = await getGoogleCalendarClient(accountId, userId);
 
   for (const task of tasks) {
     try {
@@ -278,6 +288,35 @@ export async function syncScheduledTasksToGoogle(
         "Failed to push task to Google Calendar",
         {
           taskId: task.id,
+          error: err instanceof Error ? err.message : String(err),
+        },
+        LOG_SOURCE
+      );
+    }
+  }
+
+  const allChunks = await prisma.taskChunk.findMany({
+    where: { task: { userId } },
+    select: {
+      id: true,
+      taskId: true,
+      chunkIndex: true,
+      totalChunks: true,
+      durationMin: true,
+      scheduledStart: true,
+      scheduledEnd: true,
+      googleEventId: true,
+      status: true,
+    },
+  });
+  for (const chunk of allChunks) {
+    try {
+      await pushChunk(chunk, calendarId, client, timeZone);
+    } catch (err: unknown) {
+      logger.error(
+        "Failed to push chunk to Google Calendar",
+        {
+          chunkId: chunk.id,
           error: err instanceof Error ? err.message : String(err),
         },
         LOG_SOURCE
@@ -317,37 +356,192 @@ export async function deleteTaskGoogleEvent(
   }
 }
 
-/**
- * Stub for chunk GCal event deletion. Filled in by Task 12.
- * Used by /api/focus/complete-parent to clean up GCal events when a parent task
- * is closed early.
- */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-export async function deleteChunkEvents(
-  _chunks: Array<{ id: string; googleEventId: string | null }>,
-  _userId: string,
-): Promise<void> {
-  // Task 12: implement real OAuth-based event deletion.
+const CHUNK_COMPLETED_COLOR_ID = "2"; // sage green — chunks use green for done
+const CHUNK_SCHEDULED_COLOR_ID = "8"; // graphite/gray — chunks use gray when scheduled
+
+interface TaskChunkSyncInput {
+  id: string;
+  taskId: string;
+  chunkIndex: number;
+  totalChunks: number;
+  durationMin: number;
+  scheduledStart: Date | null;
+  scheduledEnd: Date | null;
+  googleEventId: string | null;
+  status: string;
 }
-/* eslint-enable @typescript-eslint/no-unused-vars */
+
+export async function pushChunk(
+  chunk: TaskChunkSyncInput,
+  calendarId: string,
+  client: GCalClient,
+  timeZone: string
+): Promise<void> {
+  const hasSchedule = chunk.scheduledStart != null && chunk.scheduledEnd != null;
+  const isCompleted = chunk.status === "completed";
+
+  const parent = await prisma.task.findUnique({
+    where: { id: chunk.taskId },
+    select: { title: true },
+  });
+  if (!parent) return;
+
+  const baseSummary = `${parent.title} · chunk ${chunk.chunkIndex}/${chunk.totalChunks}`;
+
+  // Completed + has event: strike title + recolor sage green.
+  if (isCompleted && chunk.googleEventId) {
+    try {
+      await client.events.patch({
+        calendarId,
+        eventId: chunk.googleEventId,
+        requestBody: {
+          summary: strikethrough(baseSummary),
+          colorId: CHUNK_COMPLETED_COLOR_ID,
+        },
+      });
+    } catch (err: unknown) {
+      const status = (err as { code?: number }).code;
+      if (status === 404 || status === 410) {
+        await prisma.taskChunk.update({
+          where: { id: chunk.id },
+          data: { googleEventId: null },
+        });
+        return;
+      }
+      throw err;
+    }
+    return;
+  }
+
+  // No schedule + has event: delete the event.
+  if (!hasSchedule) {
+    if (chunk.googleEventId) {
+      await client.events
+        .delete({ calendarId, eventId: chunk.googleEventId })
+        .catch(() => {});
+      await prisma.taskChunk.update({
+        where: { id: chunk.id },
+        data: { googleEventId: null },
+      });
+    }
+    return;
+  }
+
+  // Has schedule: prepare start/end objects.
+  const start = { dateTime: chunk.scheduledStart!.toISOString(), timeZone };
+  const end = { dateTime: chunk.scheduledEnd!.toISOString(), timeZone };
+
+  // Has schedule + existing event: patch it.
+  if (chunk.googleEventId) {
+    try {
+      await client.events.patch({
+        calendarId,
+        eventId: chunk.googleEventId,
+        requestBody: { summary: baseSummary, start, end },
+      });
+      return;
+    } catch (err: unknown) {
+      const status = (err as { code?: number }).code;
+      if (status !== 404 && status !== 410) throw err;
+      // Event gone — fall through to look-before-insert.
+      await prisma.taskChunk.update({
+        where: { id: chunk.id },
+        data: { googleEventId: null },
+      });
+    }
+  }
+
+  // Look-before-insert: avoid duplicates on retries.
+  try {
+    const existing = await client.events.list({
+      calendarId,
+      privateExtendedProperty: [`chunkId=${chunk.id}`],
+      showDeleted: false,
+      singleEvents: true,
+      maxResults: 1,
+    });
+    const adopt = existing.data.items?.[0];
+    if (adopt?.id) {
+      await prisma.taskChunk.update({
+        where: { id: chunk.id },
+        data: { googleEventId: adopt.id },
+      });
+      return;
+    }
+  } catch (err: unknown) {
+    logger.warn(
+      "chunk look-before-insert events.list failed; proceeding to insert",
+      {
+        chunkId: chunk.id,
+        error: err instanceof Error ? err.message : String(err),
+      },
+      LOG_SOURCE
+    );
+  }
+
+  // Insert fresh event tagged with taskId + chunkId.
+  const created = await client.events.insert({
+    calendarId,
+    requestBody: {
+      summary: baseSummary,
+      start,
+      end,
+      colorId: CHUNK_SCHEDULED_COLOR_ID,
+      extendedProperties: {
+        private: { taskId: chunk.taskId, chunkId: chunk.id },
+      },
+    },
+  });
+  const eventId = created.data.id;
+  if (!eventId) {
+    logger.warn(
+      "Google insert returned no event id for chunk",
+      { chunkId: chunk.id },
+      LOG_SOURCE
+    );
+    return;
+  }
+  await prisma.taskChunk.update({
+    where: { id: chunk.id },
+    data: { googleEventId: eventId },
+  });
+}
+
+/**
+ * Delete GCal events for a set of chunks (e.g. when a parent task is closed
+ * early). Nulls out `googleEventId` on each chunk after deletion.
+ * Used by /api/focus/complete-parent.
+ */
+export async function deleteChunkEvents(
+  chunks: Array<{ id: string; googleEventId: string | null }>,
+  userId: string
+): Promise<void> {
+  if (chunks.length === 0) return;
+  const ctx = await getUserCalendarContext(userId);
+  if (!ctx) return;
+  for (const c of chunks) {
+    if (!c.googleEventId) continue;
+    await ctx.client.events
+      .delete({ calendarId: ctx.calendarId, eventId: c.googleEventId })
+      .catch(() => {});
+    await prisma.taskChunk.update({
+      where: { id: c.id },
+      data: { googleEventId: null },
+    });
+  }
+}
 
 export async function syncSingleTaskToGoogle(
   userId: string,
   taskId: string
 ): Promise<void> {
-  const accountId = await getPrimaryGoogleAccountId(userId);
-  if (!accountId) return;
-
   const task = await prisma.task.findUnique({ where: { id: taskId } });
   if (!task || task.userId !== userId) return;
 
-  const timeZone = await getUserTimeZone(userId);
-  const calendarId = await getOrCreateTaskCalendar(
-    userId,
-    accountId,
-    timeZone
-  );
-  const client = await getGoogleCalendarClient(accountId, userId);
+  const ctx = await getUserCalendarContext(userId);
+  if (!ctx) return;
+
+  const { client, calendarId, timeZone } = ctx;
 
   try {
     await pushOne(task, calendarId, client, timeZone);
