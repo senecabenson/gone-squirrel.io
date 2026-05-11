@@ -44,6 +44,9 @@ export function RecommendationCard() {
     startPomodoro({
       taskId: rec.task.id,
       chunkId: rec.chunk.id,
+      taskTitle: rec.task.title,
+      chunkIndex: rec.chunk.index,
+      totalChunks: rec.chunk.total,
       durationMs: rec.chunk.durationMin * 60 * 1000,
     });
   };

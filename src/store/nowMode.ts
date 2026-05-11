@@ -12,6 +12,9 @@ interface NowModeState {
 
   recommendedTaskId: string | null;
   recommendedChunkId: string | null;
+  recommendedTaskTitle: string | null;
+  recommendedChunkIndex: number | null;
+  recommendedTotalChunks: number | null;
 
   pomodoroStartedAt: number | null;
   pomodoroDurationMs: number | null;
@@ -26,8 +29,8 @@ interface NowModeState {
   setStep: (s: NowModeStep) => void;
   setEnergy: (e: EnergyLevel) => void;
   setDuration: (m: number) => void;
-  setRecommendation: (input: { taskId: string; chunkId: string }) => void;
-  startPomodoro: (input: { taskId: string; chunkId: string; durationMs: number }) => void;
+  setRecommendation: (input: { taskId: string; chunkId: string; taskTitle: string; chunkIndex: number; totalChunks: number }) => void;
+  startPomodoro: (input: { taskId: string; chunkId: string; taskTitle: string; chunkIndex: number; totalChunks: number; durationMs: number }) => void;
   pause: () => void;
   resume: () => void;
   stop: () => void;
@@ -47,6 +50,9 @@ export const useNowModeStore = create<NowModeState>()(
       durationMin: null,
       recommendedTaskId: null,
       recommendedChunkId: null,
+      recommendedTaskTitle: null,
+      recommendedChunkIndex: null,
+      recommendedTotalChunks: null,
       pomodoroStartedAt: null,
       pomodoroDurationMs: null,
       pomodoroPausedAt: null,
@@ -58,13 +64,23 @@ export const useNowModeStore = create<NowModeState>()(
       setStep: (s) => set({ step: s }),
       setEnergy: (e) => set({ energy: e, step: "pick-time" }),
       setDuration: (m) => set({ durationMin: m, step: "recommend" }),
-      setRecommendation: ({ taskId, chunkId }) => set({ recommendedTaskId: taskId, recommendedChunkId: chunkId }),
+      setRecommendation: ({ taskId, chunkId, taskTitle, chunkIndex, totalChunks }) =>
+        set({
+          recommendedTaskId: taskId,
+          recommendedChunkId: chunkId,
+          recommendedTaskTitle: taskTitle,
+          recommendedChunkIndex: chunkIndex,
+          recommendedTotalChunks: totalChunks,
+        }),
 
-      startPomodoro: ({ taskId, chunkId, durationMs }) =>
+      startPomodoro: ({ taskId, chunkId, taskTitle, chunkIndex, totalChunks, durationMs }) =>
         set({
           step: "working",
           recommendedTaskId: taskId,
           recommendedChunkId: chunkId,
+          recommendedTaskTitle: taskTitle,
+          recommendedChunkIndex: chunkIndex,
+          recommendedTotalChunks: totalChunks,
           pomodoroStartedAt: Date.now(),
           pomodoroDurationMs: durationMs,
           pomodoroPausedAt: null,
@@ -89,6 +105,9 @@ export const useNowModeStore = create<NowModeState>()(
       stop: () =>
         set({
           step: "pick-energy",
+          recommendedTaskTitle: null,
+          recommendedChunkIndex: null,
+          recommendedTotalChunks: null,
           pomodoroStartedAt: null,
           pomodoroDurationMs: null,
           pomodoroPausedAt: null,
@@ -118,6 +137,9 @@ export const useNowModeStore = create<NowModeState>()(
           durationMin: null,
           recommendedTaskId: null,
           recommendedChunkId: null,
+          recommendedTaskTitle: null,
+          recommendedChunkIndex: null,
+          recommendedTotalChunks: null,
           pomodoroStartedAt: null,
           pomodoroDurationMs: null,
           pomodoroPausedAt: null,
