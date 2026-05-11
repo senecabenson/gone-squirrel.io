@@ -33,6 +33,7 @@ interface SettingsStore extends Settings {
   gamificationEnabled: boolean;
   leftRailCollapsed: boolean;
   taskListMetaWidth: number;
+  focusModeView: "now" | "classic";
 
   // Actions
   initializeSettings: () => Promise<void>;
@@ -63,6 +64,7 @@ interface SettingsStore extends Settings {
   setGamificationEnabled: (value: boolean) => void;
   setLeftRailCollapsed: (value: boolean) => void;
   setTaskListMetaWidth: (value: number) => void;
+  setFocusModeView: (v: "now" | "classic") => void;
 }
 
 const defaultSettings: Settings & {
@@ -76,6 +78,7 @@ const defaultSettings: Settings & {
   gamificationEnabled: boolean;
   leftRailCollapsed: boolean;
   taskListMetaWidth: number;
+  focusModeView: "now" | "classic";
 } = {
   user: {
     theme: "system",
@@ -161,6 +164,7 @@ const defaultSettings: Settings & {
   gamificationEnabled: false,
   leftRailCollapsed: false,
   taskListMetaWidth: 540,
+  focusModeView: "now",
 };
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -479,6 +483,7 @@ export const useSettingsStore = create<SettingsStore>()(
       setLeftRailCollapsed: (value) => set({ leftRailCollapsed: value }),
       setTaskListMetaWidth: (value) =>
         set({ taskListMetaWidth: Math.max(220, Math.min(800, value)) }),
+      setFocusModeView: (v) => set({ focusModeView: v }),
       initializeSettings: async () => {
         try {
           // Load all settings from the database
