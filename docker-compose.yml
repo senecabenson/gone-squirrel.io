@@ -1,6 +1,9 @@
 services:
   app:
-    image: eibrahim/fluid-calendar:latest
+    build:
+      context: .
+      target: production
+    image: gonesquirrel:dev
     ports:
       - "3000:3000"
     env_file:
@@ -13,15 +16,15 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      - POSTGRES_USER=fluid
-      - POSTGRES_PASSWORD=fluid
-      - POSTGRES_DB=fluid_calendar
+      - POSTGRES_USER=gonesquirrel
+      - POSTGRES_PASSWORD=gonesquirrel
+      - POSTGRES_DB=gonesquirrel_dev
     ports:
       - "5432:5432"
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U fluid -d fluid_calendar"]
+      test: ["CMD-SHELL", "pg_isready -U gonesquirrel -d gonesquirrel_dev"]
       interval: 5s
       timeout: 5s
       retries: 5
