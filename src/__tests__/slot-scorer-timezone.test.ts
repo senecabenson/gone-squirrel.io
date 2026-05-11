@@ -60,6 +60,8 @@ const makeTask = (overrides: Partial<Task> = {}): Task => ({
   syncHash: null,
   skipSync: false,
   googleEventId: null,
+  chunkMin: 15,
+  chunkMax: 60,
   userId: "user-1",
   projectId: null,
   createdAt: new Date(),

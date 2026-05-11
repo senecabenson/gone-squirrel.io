@@ -200,6 +200,11 @@ model Task {
   energyLevel   String? // enum: 'high', 'medium', 'low'
   preferredTime String? // enum: 'morning', 'afternoon', 'evening'
 
+  // Task Chunking (Now Mode)
+  chunkMin Int        @default(15)
+  chunkMax Int        @default(60)
+  chunks   TaskChunk[]
+
   // Auto-scheduling
   isAutoScheduled Boolean   @default(false)
   scheduleLocked  Boolean   @default(false)
@@ -264,6 +269,27 @@ model Task {
   @@index([externalTaskId, source])
   @@index([syncStatus])
   @@index([externalListId])
+}
+
+model TaskChunk {
+  id              String   @id @default(cuid())
+  task            Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId          String
+  chunkIndex      Int
+  totalChunks     Int
+  durationMin     Int
+  status          String   @default("todo")
+  scheduledStart  DateTime?
+  scheduledEnd    DateTime?
+  googleEventId   String?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([taskId, chunkIndex])
+  @@index([taskId])
+  @@index([scheduledStart])
 }
 
 model Tag {
