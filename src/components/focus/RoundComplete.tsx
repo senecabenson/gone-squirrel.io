@@ -20,10 +20,19 @@ export function RoundComplete({ taskId, taskTitle, chunkId, chunkIndex, totalChu
   const reset = useNowModeStore((s) => s.reset);
   const setStep = useNowModeStore((s) => s.setStep);
   const extendDuration = useNowModeStore((s) => s.extendDuration);
+  const askedDurationMin = useNowModeStore((s) => s.durationMin);
+  const pomodoroDurationMs = useNowModeStore((s) => s.pomodoroDurationMs);
   const [finishLaterOpen, setFinishLaterOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const isChunked = totalChunks > 1;
+  const roundMin = Math.round((pomodoroDurationMs ?? 0) / 60000);
+  const leftoverMin = Math.max(0, (askedDurationMin ?? 0) - roundMin);
+  const showLeftoverCTA = leftoverMin >= 10;
+
+  const handlePickAnother = () => {
+    setStep("pick-energy");
+  };
 
   const handleDone = async () => {
     setSubmitting(true);
@@ -138,6 +147,21 @@ export function RoundComplete({ taskId, taskTitle, chunkId, chunkIndex, totalChu
               <div className="text-[11px] text-ink-soft mt-0.5 font-normal">Saves progress + reschedules.</div>
             </div>
           </button>
+
+          {showLeftoverCTA && (
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={handlePickAnother}
+              className="w-full bg-[hsl(var(--accent-peach))] text-[hsl(var(--accent-acorn))] border border-[hsl(var(--accent-acorn))]/20 rounded-xl p-3.5 mb-2 text-sm font-medium flex items-center gap-3 disabled:opacity-50"
+            >
+              <span className="text-base">⏳</span>
+              <div className="flex-1 text-left">
+                <div>Got {leftoverMin} min left — pick another?</div>
+                <div className="text-[11px] opacity-70 mt-0.5 font-normal">Use the rest of the window you asked for.</div>
+              </div>
+            </button>
+          )}
 
           <button
             type="button"
