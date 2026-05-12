@@ -6,6 +6,7 @@ interface PickInput {
   taskTitle: string;
   energy: EnergyLevel;
   durationMin: number;
+  chunkDurationMin: number;
   dueDate: Date | null;
   now: Date;
 }
@@ -147,7 +148,7 @@ export function pickReasoning(input: PickInput): string {
   const phrase = phrases[Math.floor(Math.random() * phrases.length)];
   return phrase
     .replace(/\{\{task\}\}/g, input.taskTitle)
-    .replace(/\{\{minutes\}\}/g, String(input.durationMin));
+    .replace(/\{\{minutes\}\}/g, String(input.chunkDurationMin));
 }
 
 export function pickMismatchReasoning(input: { taskTitle: string; requestedMin: number; actualMin: number }): string {

@@ -37,10 +37,11 @@ export interface ScoreResult {
     deadline: number;
     staleness: number;
     variety: number;
+    fit: number;
   };
 }
 
-const WEIGHTS = { energy: 0.4, deadline: 0.3, staleness: 0.15, variety: 0.15 };
+const WEIGHTS = { energy: 0.35, deadline: 0.25, staleness: 0.12, variety: 0.10, fit: 0.18 };
 const ENERGY_ORDER: EnergyLevel[] = ["low", "medium", "high"];
 
 function energyMatch(taskEnergy: EnergyLevel | null, chosen: EnergyLevel): number {
@@ -71,6 +72,10 @@ function varietyScore(projectId: string | null, lastCompletedProjectId: string |
   return 0;
 }
 
+function fitScore(chunkMin: number, availableMin: number): number {
+  return 1 - Math.abs(chunkMin - availableMin) / Math.max(chunkMin, availableMin);
+}
+
 function chunksFor(task: ScoreTaskInput): number[] {
   return generateChunks(task.timeEstimate, task.chunkMin, task.chunkMax);
 }
@@ -85,19 +90,21 @@ function pickChunk(chunks: number[], chosenMin: number): { index: number; durati
 }
 
 function scoreOne(task: ScoreTaskInput, ctx: ScoreContext): Omit<ScoreResult, "matchedExactly"> {
+  const chunks = chunksFor(task);
+  const chunk = pickChunk(chunks, ctx.durationMin);
   const components = {
     energy: energyMatch(task.energyLevel, ctx.energy),
     deadline: deadlineScore(task.dueDate, ctx.now),
     staleness: stalenessScore(task.createdAt, task.lastFocusedAt, ctx.now),
     variety: varietyScore(task.projectId, ctx.lastCompletedProjectId),
+    fit: fitScore(chunk.duration, ctx.durationMin),
   };
   const score =
     components.energy * WEIGHTS.energy +
     components.deadline * WEIGHTS.deadline +
     components.staleness * WEIGHTS.staleness +
-    components.variety * WEIGHTS.variety;
-  const chunks = chunksFor(task);
-  const chunk = pickChunk(chunks, ctx.durationMin);
+    components.variety * WEIGHTS.variety +
+    components.fit * WEIGHTS.fit;
   return { task, chunkIndex: chunk.index, chunkDurationMin: chunk.duration, totalChunks: chunk.total, score, components };
 }
 

@@ -6,6 +6,7 @@ describe("pickReasoning", () => {
       taskTitle: "Q3 contracts",
       energy: "high",
       durationMin: 30,
+      chunkDurationMin: 30,
       dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000),
       now: new Date(),
     });
@@ -18,6 +19,7 @@ describe("pickReasoning", () => {
       taskTitle: "UNIQUE_TASK_NAME_XYZ",
       energy: "high",
       durationMin: 30,
+      chunkDurationMin: 30,
       dueDate: null,
       now: new Date(),
     });
@@ -29,6 +31,7 @@ describe("pickReasoning", () => {
       taskTitle: "Some task",
       energy: "medium",
       durationMin: 120,
+      chunkDurationMin: 120,
       dueDate: null,
       now: new Date(),
     });

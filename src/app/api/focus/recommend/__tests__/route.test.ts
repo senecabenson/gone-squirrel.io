@@ -14,6 +14,7 @@ jest.mock("@/lib/prisma", () => ({
     taskChunk: {
       findMany: jest.fn().mockResolvedValue([]),
       create: jest.fn(),
+      upsert: jest.fn(),
     },
     userSettings: {
       findUnique: jest.fn().mockResolvedValue({ timeZone: "America/Los_Angeles" }),
