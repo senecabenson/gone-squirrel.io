@@ -252,3 +252,58 @@ in 4 days.
   1. Confirm autoscheduler still pushes correctly to GCal from the prod app (live test with a real task).
   2. Decide whether to backfill prod Postgres with selected rows from local (or just start fresh).
   3. Resume Phase 3 daily-driver use through 2026-05-17. Day 14 gate then decides Sprint 2 (Now Mode) vs Sprint 3 (ClickUp MVP).
+
+---
+
+## 2026-05-11 — Calendar polish ship + VPS sync
+
+- **Phase:** Phase 3 polish — fix in-flight calendar bugs surfaced from daily-driver use, push to `origin/main`, ready for VPS deploy.
+- **Did today:**
+  - **All-day event TZ canonicalization** (`194a84d`). `src/lib/date-utils.ts` `createAllDayDate` now stores **UTC midnight** as the canonical instant; `normalizeAllDayDate` reads UTC Y/M/D back to local midnight for FullCalendar. Closes day-drift between Docker-UTC prod and Mac-local dev. Added 5 jest cases in `src/lib/__tests__/date-utils.test.ts` covering round-trip + trailing-time-portion handling.
+  - **Surfaced API failure detail** (`1e07bf6`). `src/store/calendar.ts` adds `describeApiFailure(provider, response)` that reads up to 500 chars of response body into the thrown Error. `EventModal`, `DayView`, `MonthView`, `MultiMonthView`, `WeekView` wrap delete in try/catch + `toast.error` instead of generic `alert()`.
+  - **Boot-time GCal pull + focus/visibility refresh** (`a69e8ab`). `src/components/calendar/Calendar.tsx` owns its own `setInterval` gated on `integrations.googleCalendar.autoSync` + `syncInterval`, plus `visibilitychange` + `focus` listeners with a 30 s min-gap guard via `lastPullRef`. Closes the gap where the timer in `store/settings.ts` only armed on toggle, never on mount — external edits (phone, GCal web) didn't surface until a user re-toggled the setting.
+  - **Dev compose rebrand** (`b7d528e`). `docker-compose.yml` builds local `gonesquirrel:dev` image from `./Dockerfile` (was `eibrahim/fluid-calendar:latest`); Postgres user/db renamed to `gonesquirrel`. **Dev-only** — `docker-compose.prod.yml` untouched, VPS unaffected.
+  - Each commit ran lint + type-check via husky pre-commit. All green. 4 themed commits pushed to `origin/main`.
+- **Working:**
+  - https://gonesquirrel.nilegrowthworks.com still live (last VPS deploy from 2026-05-06).
+  - Local dev (host Next :3000, Postgres docker :5432) on `gonesquirrel:dev` image.
+  - 4 commits on `origin/main`, ready for `./scripts/deploy.sh` on VPS.
+- **Broken:** Nothing new.
+- **Next concrete task:** Sprint 2 — Now Mode rebuild. Triggered same-day (see next entry).
+
+---
+
+## 2026-05-11/12 — Sprint 2: Now Mode rebuild (23 tasks, branch `feat/now-mode`)
+
+- **Phase:** Sprint 2 (Now Mode) — replace passive 3-pane `FocusMode` with active 3-step ADHD-tuned takeover (energy → time → recommend → Pomodoro) per vision section 6.3. Classic FocusMode kept as toggle fallback. Always-on chunked tasks (15/60 defaults). Wall-clock Pomodoro persists across refresh.
+- **Did today:**
+  - **Brainstorm + spec** committed at [`add2110`](docs/superpowers/specs/2026-05-11-now-mode-design.md). Visual companion mockups walked through energy picker, time picker, recommendation card, sticky banner, Now-page hero (collapsed/expanded "Up Next"), round-complete (forced choice — no auto), Finish-later modal. Locked decisions: A horizontal energy cards, A pill time picker, A editorial centered recommendation, hybrid banner+ring sticky, wall-clock Pomodoro, strict eligibility + chunking, closest-match w/ mismatch note, always-on chunks 15/60, mark-chunk-done with early-parent-complete escape.
+  - **Implementation plan** committed at [`c2c07ea`](docs/superpowers/plans/2026-05-11-now-mode.md). 23 TDD tasks across 8 phases.
+  - **Subagent-driven execution** with `agent-router` routing: 9 Haiku tasks (mechanical), 12 Sonnet tasks (real coding), 2 Opus tasks (scheduler integration). ~35-40% token savings vs all-Sonnet. Single override on Task 1 code-quality review (reviewer wrongly flagged `@@index([taskId])` as redundant — Postgres does NOT auto-index FK referencing columns; kept the index per spec).
+  - **19 task commits + 2 doc commits** shipped to `feat/now-mode`:
+    - Schema (`eff4727`): `TaskChunk` Prisma model + `chunkMin`/`chunkMax` fields on Task. Migration `20260511210217_add_task_chunks`.
+    - Utilities: `chunks.ts` (`5bd92be`, 8 tests), `score.ts` (`16ce875`, 7 tests, 40/30/15/15 weighting + strict eligibility + closest-match fallback), `reasoning.ts` (`31220c5`, 27 buckets, 4 tests).
+    - Store (`be634e6`): `useNowModeStore` Zustand + persist middleware, wall-clock Pomodoro math, 10 tests.
+    - API routes: `POST /api/focus/recommend` (`e81770b`, 3 tests, calls scorer + materializes chunk rows on demand); `previewSlot` scheduler method extracted from `scheduleTask` (`37b7c34`, 6 tests, baseline preserved); `POST /api/focus/finish-later/preview` route; `POST /api/focus/finish-later` + `scheduleChunk` method (`ff9727c`, 3+3 tests); `POST /api/focus/complete-parent` (`ba66eed`, 4 tests, cascade to chunks); `POST /api/focus/chunks/[id]/complete` (`0c50645`, 4 tests, parent auto-close).
+    - Scheduler chunk-aware (`7cdbcc6`): `scheduleMultipleTasks` iterates chunks per task, shares one `TimeSlotManager` across all chunks. Baseline scheduler tests still green.
+    - GCal chunk sync (`fa549b9`): new `pushChunk` mirrors `pushOne` for chunks; `deleteChunkEvents` real implementation; `getUserCalendarContext` helper extracted; `pushAll` iterates chunks too. 5 tests.
+    - UI components: `EnergyPicker` + `TimePicker` (`f58ba92`); `RecommendationCard` (`9cecd34`); `PomodoroHero` with 280px conic ring, MM:SS digits split, tab-title sync, mode toggle (`8a8979f`); `UpNextSheet` + `FinishLaterModal` + `RoundComplete` (`a2bce0c`).
+    - Orchestrator + store extension for chunk meta (`c140f25`): `NowMode.tsx` reads `step` + persists `recommendedTaskTitle`/`Index`/`TotalChunks` so banner can read directly. URL hash mirrors step.
+    - Classic toggle (`88d6200`): `focusModeView` setting on `useSettingsStore`, `FocusModeToggle` segmented control, `/focus/page.tsx` branches on view.
+    - Sticky banner (`3b15371`): sienna gradient strip above app header in `(common)/layout.tsx`, conic ring + 11% per-second tick + linear progress bar at strip base. No dismiss button. Click body → `/focus`.
+  - **All 61 unit tests pass** (verified per-suite to avoid worker-pool OOM): chunks 8, score 7, reasoning 4, store 10, recommend route 3, finish-later 3, finish-later/preview 4, complete-parent 4, chunks/[id]/complete 4, preview-slot 2, schedule-chunk 3, chunked-scheduling 4, google-task-sync-chunks 5.
+  - Branch pushed to `origin/feat/now-mode` (`https://github.com/senecabenson/gone-squirrel.io/pull/new/feat/now-mode`).
+- **Working:**
+  - 19-commit feature branch live at `origin/feat/now-mode`. Bisect-friendly (each commit green via husky pre-commit).
+  - Local dev on `feat/now-mode` running at http://localhost:3000.
+  - Postgres dev DB has the migration applied + 10 `[E2E TEST]` synthetic tasks seeded for the upcoming E2E pass (mix of energy × duration × chunking).
+- **Broken:**
+  - **E2E pass not yet done.** Unit tests green; UI flows not yet verified end-to-end with Playwright + real GCal sync. Plan written in `~/.claude/plans/can-we-work-on-zany-pebble.md` — covers L1 surface basics through L9 chunked-task GCal asserts.
+  - Playwright MCP registered (`✓ Connected`) but tools require Claude Code session restart to load.
+- **Next concrete task:**
+  1. Restart Claude Code, resume per the plan's "Resume-after-restart checklist."
+  2. Run L1-L9 E2E via Playwright MCP, capturing bugs to `docs/superpowers/bugs/2026-05-12-now-mode-e2e.md`.
+  3. Patch any bugs on `feat/now-mode`, push.
+  4. PR → merge to `main`.
+  5. Deploy to VPS via `./scripts/deploy.sh` on `gonesquirrel.nilegrowthworks.com`.
+  6. Cleanup `[E2E TEST]` tasks via `UPDATE "Task" SET ... WHERE title LIKE '[E2E TEST]%'`.
