@@ -40,17 +40,19 @@ export function PomodoroHero({ taskTitle }: { taskTitle: string }) {
 
   // Tab title
   useEffect(() => {
+    const original = document.title;
     const tick = () => {
-      const { mm, ss } = formatMS(remainingMs());
+      const ms = timerMode === "countdown" ? remainingMs() : elapsedMs();
+      const { mm, ss } = formatMS(ms);
       document.title = `${mm}:${ss} · ${taskTitle}`;
     };
     tick();
     const id = setInterval(tick, 1000);
     return () => {
       clearInterval(id);
-      document.title = "GoneSquirrel";
+      document.title = original;
     };
-  }, [taskTitle, remainingMs]);
+  }, [taskTitle, remainingMs, elapsedMs, timerMode]);
 
   const displayMs = timerMode === "countdown" ? remainingMs() : elapsedMs();
   const { mm, ss } = formatMS(displayMs);
