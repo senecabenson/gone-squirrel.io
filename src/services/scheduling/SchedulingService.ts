@@ -322,6 +322,9 @@ export class SchedulingService {
    * chosen slot as a conflict) so consecutive chunks within the same batch don't
    * double-book. When omitted, falls through to `previewSlot` which builds its own
    * manager — appropriate for single-chunk API callers like /api/focus/finish-later.
+   *
+   * NOTE: This method persists `scheduledStart`/`scheduledEnd` to the DB only.
+   * Callers are responsible for GCal sync via `syncChunksToGoogle`.
    */
   async scheduleChunk(
     chunk: { id: string; taskId: string; durationMin: number },
