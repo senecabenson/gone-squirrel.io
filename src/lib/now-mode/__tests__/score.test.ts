@@ -69,4 +69,15 @@ describe("scoreTasks", () => {
     const result = scoreTasks({ tasks: [longChunked], ...CTX, durationMin: 30 });
     expect(result!.chunkDurationMin).toBe(30);
   });
+
+  test("fit score — prefers 60-min task over 15-min task when durationMin is 60", () => {
+    // All tasks have same energy (High), no deadline, same project, same staleness.
+    // Only fit differs: the 60-min task is a perfect fit; 15-min, 30-min, 120-min are not.
+    const t15 = task({ id: "t15", energyLevel: "high", timeEstimate: 15, chunkMin: 15, chunkMax: 15 });
+    const t30 = task({ id: "t30", energyLevel: "high", timeEstimate: 30, chunkMin: 30, chunkMax: 30 });
+    const t60 = task({ id: "t60", energyLevel: "high", timeEstimate: 60, chunkMin: 60, chunkMax: 60 });
+    const t120 = task({ id: "t120", energyLevel: "high", timeEstimate: 120, chunkMin: 60, chunkMax: 120 });
+    const result = scoreTasks({ tasks: [t15, t30, t60, t120], ...CTX, durationMin: 60 });
+    expect(result!.task.id).toBe("t60");
+  });
 });

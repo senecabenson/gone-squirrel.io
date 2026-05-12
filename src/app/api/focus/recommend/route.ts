@@ -108,8 +108,10 @@ export async function POST(req: NextRequest) {
     );
     chunkRows = await prisma.$transaction(
       sizes.map((min, i) =>
-        prisma.taskChunk.create({
-          data: {
+        prisma.taskChunk.upsert({
+          where: { taskId_chunkIndex: { taskId: result.task.id, chunkIndex: i + 1 } },
+          update: {},
+          create: {
             taskId: result.task.id,
             chunkIndex: i + 1,
             totalChunks: sizes.length,
@@ -127,6 +129,7 @@ export async function POST(req: NextRequest) {
         taskTitle: result.task.title,
         energy,
         durationMin,
+        chunkDurationMin: result.chunkDurationMin,
         dueDate: result.task.dueDate,
         now,
       })

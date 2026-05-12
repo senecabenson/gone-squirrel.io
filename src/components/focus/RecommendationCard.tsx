@@ -23,20 +23,28 @@ export function RecommendationCard() {
 
   useEffect(() => {
     if (!energy || !durationMin) return;
+    const controller = new AbortController();
     setLoading(true);
     setRec(null);
     fetch("/api/focus/recommend", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ energy, durationMin }),
+      signal: controller.signal,
     })
       .then(async (r) => {
         if (!r.ok) throw new Error((await r.text()) || `${r.status}`);
         return r.json() as Promise<Recommendation>;
       })
       .then(setRec)
-      .catch((e) => toast.error(e instanceof Error ? e.message : "Could not find a task"))
-      .finally(() => setLoading(false));
+      .catch((e) => {
+        if (e instanceof DOMException && e.name === "AbortError") return;
+        toast.error(e instanceof Error ? e.message : "Could not find a task");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, [energy, durationMin]);
 
   const handleStart = () => {
