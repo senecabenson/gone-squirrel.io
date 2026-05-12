@@ -40,6 +40,7 @@ interface NowModeState {
   reset: () => void;
   remainingMs: () => number;
   elapsedMs: () => number;
+  isPaused: () => boolean;
 }
 
 export const useNowModeStore = create<NowModeState>()(
@@ -160,6 +161,8 @@ export const useNowModeStore = create<NowModeState>()(
         const pausedAdditional = s.pomodoroPausedAt !== null ? Date.now() - s.pomodoroPausedAt : 0;
         return Math.max(0, Date.now() - s.pomodoroStartedAt - s.pomodoroAccruedPausedMs - pausedAdditional);
       },
+
+      isPaused: () => get().pomodoroPausedAt !== null,
     }),
     { name: "now-mode-store" },
   ),

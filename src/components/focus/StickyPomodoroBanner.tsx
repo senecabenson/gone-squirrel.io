@@ -21,7 +21,9 @@ export function StickyPomodoroBanner() {
   const durationMs = useNowModeStore((s) => s.pomodoroDurationMs);
   const taskTitle = useNowModeStore((s) => s.recommendedTaskTitle);
   const pause = useNowModeStore((s) => s.pause);
+  const resume = useNowModeStore((s) => s.resume);
   const stop = useNowModeStore((s) => s.stop);
+  const isPaused = useNowModeStore((s) => s.isPaused);
   const pathname = usePathname();
   const router = useRouter();
   const [, force] = useState(0);
@@ -39,11 +41,18 @@ export function StickyPomodoroBanner() {
 
   return (
     <div className="sticky top-0 z-50 bg-gradient-to-r from-action to-[hsl(var(--accent-acorn))] text-action-foreground shadow-lg">
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => router.push("/focus")}
-        className="w-full px-4 py-2.5 flex items-center gap-3 text-left"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            router.push("/focus");
+          }
+        }}
         aria-label="Return to Now Mode"
+        className="w-full px-4 py-2.5 flex items-center gap-3 text-left cursor-pointer"
       >
         <div
           className="w-11 h-11 rounded-full flex-shrink-0 flex items-center justify-center"
@@ -64,10 +73,15 @@ export function StickyPomodoroBanner() {
         <div className="flex gap-2 flex-shrink-0">
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); pause(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (isPaused()) resume();
+              else pause();
+            }}
+            aria-label={isPaused() ? "Resume" : "Pause"}
             className="bg-white/20 border border-white/30 rounded-lg px-3 py-1.5 text-xs"
           >
-            Pause
+            {isPaused() ? "Resume" : "Pause"}
           </button>
           <button
             type="button"
@@ -77,7 +91,7 @@ export function StickyPomodoroBanner() {
             Stop
           </button>
         </div>
-      </button>
+      </div>
       <div className="h-[3px] bg-white/20">
         <div
           className="h-full bg-amber-100 shadow-[0_0_8px_rgba(254,243,199,0.6)]"
