@@ -22,16 +22,19 @@ export function FinishLaterModal({
 }) {
   const reset = useNowModeStore((s) => s.reset);
   const [picked, setPicked] = useState<number | null>(null);
+  const [customMin, setCustomMin] = useState(90);
   const [preview, setPreview] = useState<{ start: string; reasoning: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const effectiveMin = picked === 90 ? customMin : picked;
+
   useEffect(() => {
-    if (!picked) { setPreview(null); return; }
+    if (!effectiveMin) { setPreview(null); return; }
     setPreview(null);
     fetch("/api/focus/finish-later/preview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ taskId, remainingMin: picked }),
+      body: JSON.stringify({ taskId, remainingMin: effectiveMin }),
     })
       .then(async (r) => {
         if (!r.ok) throw new Error(await r.text());
@@ -39,16 +42,16 @@ export function FinishLaterModal({
       })
       .then((p) => setPreview({ start: p.start, reasoning: p.reasoning }))
       .catch(() => setPreview(null));
-  }, [picked, taskId]);
+  }, [effectiveMin, taskId]);
 
   const handleSchedule = async () => {
-    if (!picked) return;
+    if (!effectiveMin) return;
     setSubmitting(true);
     try {
       const res = await fetch("/api/focus/finish-later", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ taskId, remainingMin: picked }),
+        body: JSON.stringify({ taskId, remainingMin: effectiveMin }),
       });
       if (!res.ok) throw new Error(await res.text());
       toast.success(`Scheduled. ${preview?.reasoning ?? ""}`);
@@ -73,7 +76,7 @@ export function FinishLaterModal({
           <p className="font-serif italic text-sm text-ink-soft mb-5">{taskTitle}</p>
 
           <p className="text-xs font-medium text-ink mb-2.5">Time still needed</p>
-          <div className="flex flex-wrap gap-2 mb-5">
+          <div className="flex flex-wrap gap-2 mb-3">
             {PILLS.map((m) => (
               <button
                 key={m}
@@ -89,17 +92,42 @@ export function FinishLaterModal({
               </button>
             ))}
           </div>
+          {picked === 90 && (
+            <div className="flex items-center gap-2 mb-5">
+              <input
+                type="number"
+                min={90}
+                step={5}
+                value={customMin}
+                onChange={(e) =>
+                  setCustomMin(Math.max(90, Number(e.target.value) || 90))
+                }
+                aria-label="Custom minutes"
+                className="w-24 rounded-xl border border-border-subtle bg-canvas px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-action/40"
+              />
+              <span className="text-xs text-ink-soft">min</span>
+            </div>
+          )}
+          {picked !== 90 && <div className="mb-5" />}
 
           {preview && (
             <div className="bg-[hsl(var(--surface-warm))] border border-border-subtle rounded-xl p-3.5 mb-5">
               <p className="font-serif text-xs text-[hsl(var(--accent-acorn))] mb-1 font-medium">Auto-schedule preview</p>
-              <p className="text-sm text-ink">{preview.reasoning}</p>
+              <p className="text-sm text-ink-soft mb-1">Next open slot after your existing meetings</p>
+              <p className="text-sm font-medium text-ink">
+                {new Intl.DateTimeFormat(undefined, {
+                  dateStyle: "short",
+                  timeStyle: "short",
+                }).format(new Date(preview.start))}
+                {" · "}
+                {effectiveMin} min
+              </p>
             </div>
           )}
 
           <button
             type="button"
-            disabled={!picked || submitting}
+            disabled={!effectiveMin || submitting}
             onClick={handleSchedule}
             className="w-full bg-action text-action-foreground rounded-xl py-4 font-semibold shadow-md shadow-action/30 disabled:opacity-50"
           >
