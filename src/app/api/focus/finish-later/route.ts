@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { authenticateRequest } from "@/lib/auth/api-auth";
 import { SchedulingService } from "@/services/scheduling/SchedulingService";
+import { syncChunksToGoogle } from "@/services/google-task-sync";
 import { generateChunks } from "@/lib/now-mode/chunks";
 
 export async function POST(req: NextRequest) {
@@ -51,6 +52,8 @@ export async function POST(req: NextRequest) {
     orderBy: { chunkIndex: "asc" },
     select: { id: true, durationMin: true, scheduledStart: true, scheduledEnd: true },
   });
+
+  await syncChunksToGoogle(auth.userId, updated.created.map((c) => c.id));
 
   return NextResponse.json({ chunks: final });
 }

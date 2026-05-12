@@ -13,6 +13,10 @@ jest.mock("@/services/scheduling/SchedulingService", () => ({
   })),
 }));
 
+jest.mock("@/services/google-task-sync", () => ({
+  syncChunksToGoogle: jest.fn().mockResolvedValue(undefined),
+}));
+
 let mockCreated: Array<{ id: string; taskId: string; durationMin: number; scheduledStart: Date | null; scheduledEnd: Date | null }> = [];
 
 jest.mock("@/lib/prisma", () => ({

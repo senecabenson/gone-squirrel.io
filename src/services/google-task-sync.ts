@@ -531,6 +531,41 @@ export async function deleteChunkEvents(
   }
 }
 
+export async function syncChunksToGoogle(
+  userId: string,
+  chunkIds: string[]
+): Promise<void> {
+  if (chunkIds.length === 0) return;
+  const ctx = await getUserCalendarContext(userId);
+  if (!ctx) return;
+  const { client, calendarId, timeZone } = ctx;
+
+  const chunks = await prisma.taskChunk.findMany({
+    where: { id: { in: chunkIds } },
+    select: {
+      id: true, taskId: true, chunkIndex: true, totalChunks: true,
+      durationMin: true, scheduledStart: true, scheduledEnd: true,
+      googleEventId: true, status: true,
+    },
+  });
+
+  for (const chunk of chunks) {
+    try {
+      await pushChunk(chunk, calendarId, client, timeZone);
+    } catch (err) {
+      logger.error(
+        "Failed to push chunk to GCal",
+        {
+          userId,
+          chunkId: chunk.id,
+          error: err instanceof Error ? err.message : String(err),
+        },
+        LOG_SOURCE
+      );
+    }
+  }
+}
+
 export async function syncSingleTaskToGoogle(
   userId: string,
   taskId: string
