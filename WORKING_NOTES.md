@@ -307,3 +307,36 @@ in 4 days.
   4. PR → merge to `main`.
   5. Deploy to VPS via `./scripts/deploy.sh` on `gonesquirrel.nilegrowthworks.com`.
   6. Cleanup `[E2E TEST]` tasks via `UPDATE "Task" SET ... WHERE title LIKE '[E2E TEST]%'`.
+
+## 2026-05-12 — Sprint 2 close-out: 12 bugs fixed, PR #1 merged, prod deployed
+
+- **Phase:** Sprint 2 close-out.
+- **Resume context:** Previous laptop crash mid-patching. Picked up with 14 dirty files covering 11 of 12 bugs in [`docs/superpowers/bugs/2026-05-12-now-mode-e2e.md`](docs/superpowers/bugs/2026-05-12-now-mode-e2e.md). Verified each in-progress diff against the bug doc spec before extending.
+- **Did today:**
+  - **Phase A — root-cause additions the diff missed:**
+    - Bug 1 client-side: added `AbortController` to `src/components/focus/RecommendationCard.tsx:24-44`. Server upsert was defense-in-depth; the cause was React 18 StrictMode dev double-effect firing two POSTs. AbortController aborts the stale fetch on effect re-run; ignores `AbortError` in `.catch` so the toast doesn't flash. Confirmed in E2E network log: one 200 + two `ERR_ABORTED` (clean cancellation, no 500s).
+    - Bug 5 leftover CTA: `src/components/focus/RoundComplete.tsx` reads `useNowModeStore.durationMin` (user ask) and `pomodoroDurationMs` (round actual), renders a `⏳ Got {leftoverMin} min left — pick another?` button when gap ≥10 min, routes to `setStep('pick-energy')`. Verified live: 60-min ask + 15-min chunk → CTA rendered "Got 45 min left".
+  - **Phase B — verification of in-progress fixes:** Read all 14 modified files; all match suggested fixes in bug doc. Scorer weights re-sum to 1.0 (0.35+0.25+0.12+0.10+0.18). `syncChunksToGoogle` is a clean batch wrapper around the previously orphaned `pushChunk` — no duplication.
+  - **Phase C — tests:**
+    - `npm run type-check` clean.
+    - `npm run lint` clean after fixing `no-unused-expressions` on banner ternary (`StickyPomodoroBanner.tsx:76-83`).
+    - 13 unit suites all green, per-suite with `NODE_OPTIONS=--max-old-space-size=4096` (worker-pool OOM avoidance on 8GB RAM): chunks 8, score 8 (added fitScore test), reasoning 4, store 10, recommend 3 (added `upsert: jest.fn()` to mock), finish-later 3 (added `syncChunksToGoogle` mock), finish-later/preview 4, complete-parent 4, chunks/[id]/complete 4, preview-slot 2, schedule-chunk 3, chunked-scheduling 4, google-task-sync-chunks 5. Total **62 tests**.
+    - **E2E via Playwright MCP:** Verified live on `localhost:3000`. Bug 2 (`button [pressed]`), Bug 3 (30-min ask → 30-min task picked, not 15-min — fitScore working), Bug 4 ("15 min, steady pace" reasoning), Bug 5 (CTA renders + routes), Bug 6 (title flips 00:05 ↔ 14:47 with COUNT UP ↔ COUNTDOWN), Bug 7 (title restores to "Now | GoneSquirrel" on Done early), Bug 8 (DB query confirms `TaskChunk.googleEventId=cl2jdllhla53p9bpq0a52pf3ac` populated after Finish Later), Bug 10 (preview hint + reasoning visible), Bug 11 (banner outer is `DIV role=button`, nested are real `<button>`s), Bug 12 (Pause ↔ Resume label + aria-label flip).
+  - **Phase D — commits + PR:**
+    - 8 commits on `feat/now-mode`: 7 per-bug fixes + 1 chore (`.gitignore` for `.playwright-mcp/`). Pushed.
+    - Installed `gh` CLI via Homebrew. Auth via `gh auth login --web` (second attempt; first session's auth didn't persist for unclear reasons).
+    - Created PR #1 (`https://github.com/senecabenson/gone-squirrel.io/pull/1`). Title: `fix(now-mode): close 12 bugs from 2026-05-12 E2E pass`. Body summarizes each bug.
+    - Merged via **rebase** to preserve per-bug commits on `main` for bisect. main now at `a5d5ace`.
+  - **Phase E — deploy:**
+    - SSH to `root@31.97.145.236`, `cd /opt/gonesquirrel && ./scripts/deploy.sh`. `git pull --ff-only` brought all of Sprint 2 (Now Mode rebuild — 7529 insertions across 45 files) + 8 bug fixes. Docker build 267s (npm ci 82s + next build 172s). Prisma `migrate deploy` ran at container start (entrypoint.sh) — `20260511210217_add_task_chunks` migration applied to prod DB. Health check `https://gonesquirrel.nilegrowthworks.com` green ✓.
+    - **Cleanup SQL skipped** — `[E2E TEST]` seed only exists on dev DB, not prod.
+- **Working:**
+  - **Prod: Now Mode live at `https://gonesquirrel.nilegrowthworks.com/focus`.** Energy → Time → Recommend → Pomodoro flow. Sticky banner off-page. Finish Later → GCal push.
+  - main = `a5d5ace`. feat/now-mode branch retained on origin (not deleted at merge).
+  - `gh` CLI authed (token in keyring).
+- **Broken:**
+  - None known on this surface. Pre-existing Jest worker-pool OOM unchanged (mitigated by per-suite runs).
+- **Next concrete task:**
+  - **Smoke-test prod** (manual, ~5 min): cold `/focus` → energy + time → recommend (Network: one POST, no 500); start Pomodoro, navigate to `/calendar` (banner appears, Pause ↔ Resume); Done early → leftover CTA appears; Finish Later 45 → check GCal calendar for new event.
+  - **Update Google Cloud Console OAuth client** if not already (authorized redirect `https://gonesquirrel.nilegrowthworks.com/api/calendar/google`) — see `docs/deploy-vps.md`.
+  - **Sprint 3 (ClickUp MVP)** — decide kickoff date.
