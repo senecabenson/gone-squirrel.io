@@ -238,7 +238,7 @@ export function TaskModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="flex max-h-[90vh] flex-col bg-surface-raised sm:max-w-[500px]">
+      <DialogContent className="flex max-h-[95vh] flex-col overflow-hidden bg-surface-raised sm:max-w-[640px] md:max-w-[900px] lg:max-w-[1100px]">
         {isSubmitting && <LoadingOverlay />}
         <DialogHeader>
           <DialogTitle>{task ? "Edit Task" : "New Task"}</DialogTitle>
@@ -246,8 +246,10 @@ export function TaskModal({
 
         <form
           onSubmit={handleSubmit}
-          className="space-y-block overflow-y-auto"
+          className="flex-1 min-h-0 space-y-block overflow-y-auto px-1"
         >
+          <div className="space-y-block md:grid md:grid-cols-2 md:gap-x-6 md:gap-y-0 md:space-y-0 md:items-start">
+          <div className="space-y-block">
           {/* Title */}
           <div className="space-y-2">
             <Label
@@ -283,8 +285,101 @@ export function TaskModal({
             />
           </div>
 
+          {/* Project */}
+          <div className="space-y-2">
+            <Label
+              htmlFor="project"
+              className="text-meta uppercase tracking-wide text-ink-mute mb-1"
+            >
+              Project
+            </Label>
+            <Select
+              value={projectId || "none"}
+              onValueChange={(value) =>
+                setProjectId(value === "none" ? null : value)
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="No Project" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No Project</SelectItem>
+                {projects
+                  .filter((p) => p.status === "active")
+                  .map((project) => (
+                    <SelectItem key={project.id} value={project.id}>
+                      {project.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Tags */}
+          <div className="space-y-2">
+            <Label className="text-meta uppercase tracking-wide text-ink-mute mb-1">
+              Tags
+            </Label>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {tags.map((tag) => (
+                <label
+                  key={tag.id}
+                  className={cn(
+                    "inline-flex cursor-pointer items-center rounded-full px-3 py-1.5 text-sm transition-colors",
+                    selectedTagIds.includes(tag.id)
+                      ? "bg-primary/20 text-primary"
+                      : "bg-muted text-ink-soft hover:bg-muted/70"
+                  )}
+                >
+                  <Checkbox
+                    className="sr-only"
+                    checked={selectedTagIds.includes(tag.id)}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setSelectedTagIds([...selectedTagIds, tag.id]);
+                      } else {
+                        setSelectedTagIds(
+                          selectedTagIds.filter((id) => id !== tag.id)
+                        );
+                      }
+                    }}
+                  />
+                  <span
+                    className="mr-2 h-2 w-2 rounded-full"
+                    style={{ backgroundColor: tag.color || "var(--muted)" }}
+                  />
+                  {tag.name}
+                </label>
+              ))}
+            </div>
+
+            <div className="mt-3 flex gap-2">
+              <Input
+                value={newTagName}
+                onChange={(e) => setNewTagName(e.target.value)}
+                placeholder="New tag name"
+              />
+              <Input
+                type="color"
+                value={newTagColor}
+                onChange={(e) => setNewTagColor(e.target.value)}
+                className="h-9 w-9 p-1"
+              />
+              <Button
+                type="button"
+                onClick={handleCreateTag}
+                disabled={!newTagName.trim()}
+                variant="secondary"
+              >
+                Add Tag
+              </Button>
+            </div>
+          </div>
+          </div>
+          <div className="space-y-block">
+
           {/* Grid fields: status, due date, start date, duration, priority, energy, time */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
             <div className="space-y-2">
               <Label
                 htmlFor="status"
@@ -541,97 +636,6 @@ export function TaskModal({
             )}
           </div>
 
-          {/* Project */}
-          <div className="space-y-2">
-            <Label
-              htmlFor="project"
-              className="text-meta uppercase tracking-wide text-ink-mute mb-1"
-            >
-              Project
-            </Label>
-            <Select
-              value={projectId || "none"}
-              onValueChange={(value) =>
-                setProjectId(value === "none" ? null : value)
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="No Project" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No Project</SelectItem>
-                {projects
-                  .filter((p) => p.status === "active")
-                  .map((project) => (
-                    <SelectItem key={project.id} value={project.id}>
-                      {project.name}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Tags */}
-          <div className="space-y-2">
-            <Label className="text-meta uppercase tracking-wide text-ink-mute mb-1">
-              Tags
-            </Label>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {tags.map((tag) => (
-                <label
-                  key={tag.id}
-                  className={cn(
-                    "inline-flex cursor-pointer items-center rounded-full px-3 py-1.5 text-sm transition-colors",
-                    selectedTagIds.includes(tag.id)
-                      ? "bg-primary/20 text-primary"
-                      : "bg-muted text-ink-soft hover:bg-muted/70"
-                  )}
-                >
-                  <Checkbox
-                    className="sr-only"
-                    checked={selectedTagIds.includes(tag.id)}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        setSelectedTagIds([...selectedTagIds, tag.id]);
-                      } else {
-                        setSelectedTagIds(
-                          selectedTagIds.filter((id) => id !== tag.id)
-                        );
-                      }
-                    }}
-                  />
-                  <span
-                    className="mr-2 h-2 w-2 rounded-full"
-                    style={{ backgroundColor: tag.color || "var(--muted)" }}
-                  />
-                  {tag.name}
-                </label>
-              ))}
-            </div>
-
-            <div className="mt-3 flex gap-2">
-              <Input
-                value={newTagName}
-                onChange={(e) => setNewTagName(e.target.value)}
-                placeholder="New tag name"
-              />
-              <Input
-                type="color"
-                value={newTagColor}
-                onChange={(e) => setNewTagColor(e.target.value)}
-                className="h-9 w-9 p-1"
-              />
-              <Button
-                type="button"
-                onClick={handleCreateTag}
-                disabled={!newTagName.trim()}
-                variant="secondary"
-              >
-                Add Tag
-              </Button>
-            </div>
-          </div>
-
           {/* Recurrence */}
           <div className="space-y-2">
             <div className="flex items-center space-x-2">
@@ -762,6 +766,8 @@ export function TaskModal({
                 </div>
               </div>
             )}
+          </div>
+          </div>
           </div>
 
           <DialogFooter className="border-t border-[hsl(var(--border-subtle))] pt-4">
