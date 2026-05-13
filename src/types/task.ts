@@ -41,6 +41,8 @@ export interface Task {
   dueDate?: Date | null;
   startDate?: Date | null;
   duration?: number | null;
+  chunkMin?: number;
+  chunkMax?: number;
   priority?: Priority | null;
   energyLevel?: EnergyLevel | null;
   preferredTime?: TimePreference | null;
