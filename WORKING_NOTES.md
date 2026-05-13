@@ -340,3 +340,38 @@ in 4 days.
   - **Smoke-test prod** (manual, ~5 min): cold `/focus` → energy + time → recommend (Network: one POST, no 500); start Pomodoro, navigate to `/calendar` (banner appears, Pause ↔ Resume); Done early → leftover CTA appears; Finish Later 45 → check GCal calendar for new event.
   - **Update Google Cloud Console OAuth client** if not already (authorized redirect `https://gonesquirrel.nilegrowthworks.com/api/calendar/google`) — see `docs/deploy-vps.md`.
   - **Sprint 3 (ClickUp MVP)** — decide kickoff date.
+
+## 2026-05-13 — TaskModal desktop layout + prod deploy fix
+
+- **Phase:** Polish + deploy hygiene.
+- **Did today:**
+  - **TaskModal redesign (desktop UX):**
+    - Issue: New Task modal had a double scrollbar + was capped at 500px on every breakpoint ≥sm, forcing scroll even on a 1440px monitor.
+    - Root cause for double scroll: [src/components/ui/dialog.tsx:56](src/components/ui/dialog.tsx#L56) base `DialogContent` carries `max-h-[85vh] overflow-y-auto`, and [src/components/tasks/TaskModal.tsx:249](src/components/tasks/TaskModal.tsx#L249) form added its own `overflow-y-auto`. Two nested scroll containers.
+    - Fix shipped in commits `500b1ba` (feat/now-mode) → cherry-picked as `cedf5ae` on main:
+      - DialogContent: `overflow-hidden` + responsive `sm:max-w-[640px] md:max-w-[900px] lg:max-w-[1100px]` + `max-h-[95vh]`.
+      - Form: `flex-1 min-h-0 overflow-y-auto px-1` — only scroller; `px-1` keeps the title input's focus ring off the form edge.
+      - Restructured form children into explicit left/right column wrappers (`md:grid md:grid-cols-2 md:gap-x-6`). Left col: Title, Description, Project, Tags. Right col: schedule grid, Chunk Size, Auto-Schedule, Recurrence. Footer full-width.
+      - Inner schedule grid: `gap-x-4 gap-y-3` (was `gap-4`).
+    - Verified via Playwright MCP at 1440×900: form `scrollHeight===clientHeight===740`, no scroll. Created task with chunkSize=45, duration=90 → API returned chunkMin/Max=45 + auto-scheduled. Chunking works end-to-end.
+  - **Branch hygiene problem surfaced:** `feat/now-mode` and `main` had diverged by ~30 commits each — Sprint 2 PR squash-merged with new SHAs but local branch kept old SHAs, then we kept committing on the stale branch (chunk-size picker `22a9c81` + TaskModal fix `500b1ba`). `git merge feat/now-mode` would have pulled 30 duplicate-content commits.
+    - Resolved by cherry-picking only the 2 commits we wanted: `5f43813` (chunk picker) + `cedf5ae` (TaskModal layout). Pushed to main.
+  - **Prod deploy two-step:**
+    - First deploy after push: `./scripts/deploy.sh` succeeded, container Up, Next "Ready in 95ms" — but Traefik 502'd. `docker exec root-traefik-1 wget -qO- http://gonesquirrel-app-1:3000` returned `Connection refused`. Root cause: **Next.js standalone server defaults `HOSTNAME=localhost`**, so it never bound 0.0.0.0 and was unreachable from the Traefik network even though both containers shared `root_default`.
+    - Fix: `ENV HOSTNAME=0.0.0.0` + `ENV PORT=3000` in [Dockerfile](Dockerfile) production stage. Commit `6745bb8`. Second deploy → health check `app responding ✓`.
+- **Working:**
+  - Prod: TaskModal new desktop layout live at `https://gonesquirrel.nilegrowthworks.com`. Single scrollbar (or none) on ≥md viewports, balanced 2-col, chunk-size pill picker shipped.
+  - main = `6745bb8`. Cherry-pick strategy preserved Sprint 3 prep work on feat/now-mode for later harvest.
+- **Broken:**
+  - **`feat/now-mode` branch is permanently diverged from main** (~30 commits on each side, mostly duplicate logical content). Treat as a salvage source, not a working branch. Don't merge it back.
+  - Pre-existing Jest worker-pool OOM unchanged.
+- **Next concrete task:**
+  1. **Branch cleanup:** delete `feat/now-mode` locally + on origin (`git branch -D feat/now-mode && git push origin --delete feat/now-mode`) once we've confirmed no further commits there are needed.
+  2. **Adopt trunk-based workflow going forward:** branch per feature, lifetime <1-2 days, PR even solo, squash-merge, **delete branch immediately after merge** (both local + remote). Never reuse a branch name. New features: `feat/<topic>-YYYYMMDD`.
+  3. **Eventual:** wire GitHub Actions to auto-deploy main on green CI (replace manual `./scripts/deploy.sh`). Tabled for now; ship first.
+  4. **Sprint 3 (ClickUp MVP)** kickoff still pending.
+- **Important context for future-me:**
+  - **Branch divergence trap:** if you PR-and-squash-merge `feat/X` to main, the SHAs on main do NOT match the SHAs on the local branch. If you keep committing on `feat/X`, a future `git merge feat/X` will try to apply 30 duplicate commits. Always delete the branch right after merge. Cherry-pick is the recovery hatch, not the workflow.
+  - **Next.js standalone bind:** when deploying behind a reverse proxy in Docker, set `HOSTNAME=0.0.0.0` explicitly. The default `localhost` binding silently breaks cross-container routing — Traefik will 502 even though the app logs "Ready".
+  - **Modal scroll pattern:** for shadcn Dialog with a form that manages its own scroll, set `overflow-hidden` on `DialogContent` (overriding the base `overflow-y-auto`) and `flex-1 min-h-0 overflow-y-auto` on the inner form. Without `min-h-0` the flex child refuses to shrink below content height.
+
