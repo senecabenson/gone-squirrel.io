@@ -96,6 +96,7 @@ export function TaskModal({
   const [dueDate, setDueDate] = useState<string>("");
   const [startDate, setStartDate] = useState<string>("");
   const [duration, setDuration] = useState<string>("");
+  const [chunkSize, setChunkSize] = useState<number>(30);
   const [energyLevel, setEnergyLevel] = useState<EnergyLevel | "">("");
   const [preferredTime, setPreferredTime] = useState<TimePreference | "">("");
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
@@ -125,6 +126,7 @@ export function TaskModal({
     setDueDate("");
     setStartDate("");
     setDuration("");
+    setChunkSize(30);
     setEnergyLevel("");
     setPreferredTime("");
     setSelectedTagIds([]);
@@ -165,6 +167,7 @@ export function TaskModal({
         setStartDate("");
       }
       setDuration(task.duration?.toString() || "");
+      setChunkSize(task.chunkMax ?? 30);
       setEnergyLevel(task.energyLevel || "");
       setPreferredTime(task.preferredTime || "");
       setSelectedTagIds(task.tags.map((t) => t.id));
@@ -208,6 +211,8 @@ export function TaskModal({
         isAutoScheduled,
         scheduleLocked,
         priority,
+        chunkMin: chunkSize,
+        chunkMax: chunkSize,
       });
       onClose();
     } catch (error) {
@@ -438,6 +443,36 @@ export function TaskModal({
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          {/* Chunk Size */}
+          <div className="space-y-2">
+            <Label className="text-meta uppercase tracking-wide text-ink-mute mb-1">
+              Chunk Size
+            </Label>
+            <div className="flex flex-wrap gap-2">
+              {[15, 30, 45, 60].map((m) => {
+                const isSelected = chunkSize === m;
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setChunkSize(m)}
+                    aria-pressed={isSelected}
+                    className={`rounded-full border px-4 py-2 text-sm font-medium transition-all ${
+                      isSelected
+                        ? "bg-action text-action-foreground border-action shadow-md shadow-action/25"
+                        : "bg-canvas border-border-subtle hover:border-action/40 text-ink"
+                    }`}
+                  >
+                    {m}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs italic text-ink-soft">
+              How big each focus chunk should be when this task gets split across rounds.
+            </p>
           </div>
 
           {/* Auto-schedule section */}
