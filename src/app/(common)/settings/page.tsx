@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AccountManager } from "@/components/settings/AccountManager";
 import { AutoScheduleSettings } from "@/components/settings/AutoScheduleSettings";
 import { CalendarSettings } from "@/components/settings/CalendarSettings";
+import { ClickUpIntegrationSettings } from "@/components/settings/ClickUpIntegrationSettings";
 import { ImportExportSettings } from "@/components/settings/ImportExportSettings";
 import { IntegrationSettings } from "@/components/settings/IntegrationSettings";
 import { LogViewer } from "@/components/settings/LogViewer";
@@ -26,6 +27,7 @@ type SettingsTab =
   | "calendar"
   | "auto-schedule"
   | "integrations"
+  | "clickup"
   | "system"
   | "task-sync"
   | "logs"
@@ -49,6 +51,7 @@ export default function SettingsPage() {
       { id: "calendar", label: "Calendar" },
       { id: "auto-schedule", label: "Auto-schedule" },
       { id: "integrations", label: "Integrations" },
+      { id: "clickup", label: "ClickUp" },
       { id: "task-sync", label: "Task sync" },
       { id: "notifications", label: "Notifications" },
       { id: "import-export", label: "Import & export" },
@@ -77,6 +80,7 @@ export default function SettingsPage() {
         "calendar",
         "auto-schedule",
         "integrations",
+        "clickup",
         "task-sync",
         "system",
         "logs",
@@ -135,6 +139,8 @@ export default function SettingsPage() {
         return <AutoScheduleSettings />;
       case "integrations":
         return <IntegrationSettings />;
+      case "clickup":
+        return <ClickUpIntegrationSettings />;
       case "task-sync":
         return <TaskSyncSettings />;
       case "notifications":
