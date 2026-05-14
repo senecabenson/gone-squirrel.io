@@ -23,9 +23,11 @@ import { prisma } from "@/lib/prisma";
 import { TaskStatus } from "@/types/task";
 
 import { FieldMapper } from "./field-mapper";
+import { ClickUpFieldMapper } from "./providers/clickup-field-mapper";
 import { OutlookFieldMapper } from "./providers/outlook-field-mapper";
 import { GoogleFieldMapper } from "./providers/google-field-mapper";
 // Import provider implementations
+import { ClickUpProvider } from "./providers/clickup/clickup-provider";
 import { OutlookTaskProvider } from "./providers/outlook-provider";
 import {
   ExternalTask,
@@ -57,6 +59,8 @@ export class TaskSyncManager {
         return new OutlookFieldMapper();
       case "GOOGLE":
         return new GoogleFieldMapper();
+      case "CLICKUP":
+        return new ClickUpFieldMapper();
       // Add cases for other provider types
       default:
         return new FieldMapper();
@@ -105,6 +109,17 @@ export class TaskSyncManager {
         );
         const googleClient = await getGoogleTasksClient(dbProvider.accountId, dbProvider.account.userId);
         return new GoogleTaskProvider(googleClient, dbProvider.accountId, dbProvider.account.userId);
+      case "CLICKUP":
+        if (!dbProvider.account?.accessToken) {
+          throw new Error(
+            `Missing access token for ClickUp provider ${providerId}`
+          );
+        }
+        return new ClickUpProvider(
+          dbProvider.account.accessToken,
+          dbProvider,
+          prisma
+        );
       // case "CALDAV":
       //   return new CalDAVTaskProvider(dbProvider);
       default:
@@ -178,6 +193,11 @@ export class TaskSyncManager {
         fieldMapper,
         tracker
       );
+
+      // Post-pass: resolve subtask parent references (for providers that return
+      // parentExternalId on ExternalTask — e.g., ClickUp). No-op for providers
+      // that don't populate the field.
+      await this.linkSubtaskParents(provider, mapping);
 
       // Update the mapping with success status
       await prisma.taskListMapping.update({
@@ -830,6 +850,57 @@ export class TaskSyncManager {
 
       return titleMatch && dueDateMatch;
     });
+  }
+
+  /**
+   * Resolve external subtask parent references to local Task.parentTaskId.
+   * No-op for providers whose ExternalTask shape omits parentExternalId.
+   */
+  private async linkSubtaskParents(
+    provider: TaskProviderInterface,
+    mapping: TaskListMapping & { provider: DbTaskProvider }
+  ): Promise<void> {
+    try {
+      const externals = await provider.getTasks(mapping.externalListId);
+      const withParent = externals.filter((t) => t.parentExternalId);
+      if (withParent.length === 0) return;
+
+      const externalIds = new Set<string>();
+      for (const t of withParent) {
+        externalIds.add(t.id);
+        if (t.parentExternalId) externalIds.add(t.parentExternalId);
+      }
+
+      const localTasks = await prisma.task.findMany({
+        where: {
+          projectId: mapping.projectId,
+          externalTaskId: { in: Array.from(externalIds) },
+        },
+        select: { id: true, externalTaskId: true, parentTaskId: true },
+      });
+      const byExt = new Map(
+        localTasks.map((t) => [t.externalTaskId as string, t])
+      );
+
+      for (const t of withParent) {
+        const child = byExt.get(t.id);
+        const parent = byExt.get(t.parentExternalId as string);
+        if (!child || !parent || child.parentTaskId === parent.id) continue;
+        await prisma.task.update({
+          where: { id: child.id },
+          data: { parentTaskId: parent.id },
+        });
+      }
+    } catch (error) {
+      logger.warn(
+        "linkSubtaskParents post-pass failed (non-fatal)",
+        {
+          mappingId: mapping.id,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        LOG_SOURCE
+      );
+    }
   }
 
   /**
