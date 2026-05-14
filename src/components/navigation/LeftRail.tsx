@@ -64,7 +64,7 @@ export function LeftRail() {
         href="/calendar"
         className={cn(
           "mb-section flex items-center",
-          collapsed ? "justify-center px-0" : "gap-0.5 px-2"
+          collapsed ? "justify-center px-0" : "px-2"
         )}
         aria-label="GoneSquirrel home"
         title={collapsed ? "GoneSquirrel" : undefined}
@@ -75,12 +75,12 @@ export function LeftRail() {
             <img
               src="/brand/svg/wordmark-green.svg"
               alt="GoneSquirrel.io"
-              className="block h-7 w-auto dark:hidden"
+              className="block h-7 w-auto -ml-2 dark:hidden"
             />
             <img
               src="/brand/svg/wordmark-green-dark.svg"
               alt="GoneSquirrel.io"
-              className="hidden h-7 w-auto dark:block"
+              className="hidden h-7 w-auto -ml-2 dark:block"
             />
           </>
         )}
