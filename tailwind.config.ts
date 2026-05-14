@@ -114,6 +114,7 @@ const config: Config = {
         display: ["var(--font-display)", "ui-serif", "Georgia", "serif"],
         sans: ["var(--font-body)", "ui-sans-serif", "system-ui", "sans-serif"],
         mono: ["var(--font-mono)", "ui-monospace", "Menlo", "monospace"],
+        brand: ["var(--font-brand)", "Nunito", "system-ui", "sans-serif"],
       },
       fontSize: {
         "display-xl": [
