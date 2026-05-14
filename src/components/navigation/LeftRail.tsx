@@ -69,7 +69,7 @@ export function LeftRail() {
         aria-label="GoneSquirrel home"
         title={collapsed ? "GoneSquirrel" : undefined}
       >
-        <IconMark className="h-7 w-7 shrink-0" />
+        <IconMark className="h-12 w-12 shrink-0" />
         {!collapsed && (
           <>
             <img
