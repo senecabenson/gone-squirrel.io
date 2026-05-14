@@ -375,3 +375,97 @@ in 4 days.
   - **Next.js standalone bind:** when deploying behind a reverse proxy in Docker, set `HOSTNAME=0.0.0.0` explicitly. The default `localhost` binding silently breaks cross-container routing — Traefik will 502 even though the app logs "Ready".
   - **Modal scroll pattern:** for shadcn Dialog with a form that manages its own scroll, set `overflow-hidden` on `DialogContent` (overriding the base `overflow-y-auto`) and `flex-1 min-h-0 overflow-y-auto` on the inner form. Without `min-h-0` the flex child refuses to shrink below content height.
 
+## 2026-05-13 (evening) — Sprint 3 kickoff: ClickUp integration backend (Phase 0–3 complete + verified)
+
+- **Phase:** Sprint 3 (ClickUp MVP) — backend shipped, no UI yet.
+- **Did today:**
+  - **Plan written** at `~/.claude/plans/if-i-want-claude-sorted-kettle.md`. ClickUp v2 API audit at `~/.claude/plans/if-i-want-claude-sorted-kettle-agent-aef26bc88497072b4.md`. Both worth re-reading before resuming.
+  - **Architecture decision: hybrid sync.** ClickUp owns content fields (title, desc, status, dates, priority, tags). Local DB owns scheduling (TaskChunk, scheduledStart/End, isAutoScheduled, googleEventId, chunkMin/Max, scheduleLocked) — never pushed to ClickUp. Energy + preferred time pushed via ClickUp Custom Fields per List. Recurrence (RRULE) stays local — ClickUp v2 API does not expose recurrence.
+  - **Phase 0 — Prisma schema** ([prisma/migrations/20260513142638_add_workspace_and_subtask_hierarchy/](prisma/migrations/20260513142638_add_workspace_and_subtask_hierarchy/migration.sql)):
+    - New `Workspace` model — maps to ClickUp Space (Motion-style hierarchy). Fields: id, name, color, status, externalId, externalSource, lastSyncedAt, userId.
+    - `Project.workspaceId` nullable FK (existing projects = no workspace).
+    - `Tag.workspaceId` (Tags scoped per Workspace, matching ClickUp per-Space tag scoping; nullable for legacy global tags). Added `fgColor` + `externalSource` columns. Unique key now `[name, userId, workspaceId]`.
+    - `Task.parentTaskId` self-relation for ClickUp subtasks.
+    - Hand-wrote SQL + ran `prisma migrate deploy` because `migrate dev` is interactive-only and Claude Code shell is non-TTY. **Pattern for future migrations: write SQL → deploy. Never try to run migrate dev from non-TTY.**
+  - **Phase 1 — ClickUp provider** ([src/lib/task-sync/providers/clickup/](src/lib/task-sync/providers/clickup/)):
+    - `clickup-client.ts` — REST wrapper with `Authorization: pk_xxx` raw header (NO Bearer for PAT), 429 backoff via `X-RateLimit-Reset`, throws `ClickUpApiError` on other 4xx/5xx. 14 methods: getTeams, getSpaces, getFolders, getFolderlessLists, getListsInFolder, getList, getTasksInList (paginated 100/page), getTask, createTask, updateTask, deleteTask, setCustomField, createCustomField (returns null on 4xx — Free plan degradation), upsertTag, createWebhook (env-gated stub).
+    - `types.ts` — ClickUp API types.
+    - `clickup-field-mapper.ts` — pure functions (priorityToClickUp/From, dateToClickUp/From, statusToClickUp/From, tagsToClickUp/From, energyLevelFromCustomFields, mapExternalTaskToInternal, mapClickUpTaskToExternalTask, etc.).
+    - `clickup-provider.ts` — `ClickUpProvider` implements `TaskProviderInterface`. Includes `ensureCustomFields(listId)` for energy + preferredTime (Phase 1.5) and `syncTagColors(workspaceId, ctags)` for bg/fg color (Phase 1.6). Per-list settings (statusMap + customFieldIds) stored in `TaskProvider.settings.lists[listId]` JSON blob (NOT TaskListMapping — that has no settings column).
+  - **Phase 2 — Integration routes** ([src/app/api/integrations/clickup/](src/app/api/integrations/clickup/)):
+    - `_clickup-http.ts` — throwaway thin REST helper used by route handlers. Phase 1's `ClickUpClient` could replace it later but routes work standalone.
+    - `connect/route.ts` — POST `{token}` → validate via `/team` → upsert `ConnectedAccount` (provider=CLICKUP) + `TaskProvider`. Uses user's GS email or `"clickup-pat"` sentinel for ConnectedAccount.email.
+    - `disconnect/route.ts` — DELETE: archives Workspaces + child Projects (status="archived"), hard-deletes TaskProvider + ConnectedAccount.
+    - `spaces/route.ts` — GET: ClickUp Spaces with `enabled` flag (= local Workspace exists).
+    - `spaces/[spaceId]/enable/route.ts` — POST upsert Workspace, DELETE archive.
+    - `spaces/[spaceId]/lists/route.ts` — GET: flattens folderless + folder-nested lists.
+    - `lists/[listId]/enable/route.ts` — POST: creates Project + TaskListMapping. Requires parent Space already enabled. DELETE: archive Project + disable mapping.
+    - `sync-now/route.ts` — POST: invokes `TaskSyncManager.syncTaskList` for each mapping under the CLICKUP provider.
+  - **Phase 3 — Sync infra wiring** ([src/lib/task-sync/task-sync-manager.ts](src/lib/task-sync/task-sync-manager.ts)):
+    - Added `CLICKUP` case to `getProvider` (instantiates ClickUpProvider with token + dbProvider + prisma).
+    - Built `ClickUpFieldMapper` extends `FieldMapper` at [src/lib/task-sync/providers/clickup-field-mapper.ts](src/lib/task-sync/providers/clickup-field-mapper.ts) — note this is at root `/providers/`, NOT inside `/providers/clickup/`. Separate from the pure-function mapper at `/providers/clickup/clickup-field-mapper.ts`. The class form is required because `TaskSyncManager.getFieldMapper` returns FieldMapper instances and the sync engine uses field mapper transforms during conflict resolution.
+    - Added `CLICKUP` case to `getFieldMapper`.
+    - Added generic `linkSubtaskParents` post-pass method to `TaskSyncManager`. After `syncBidirectional` returns, this method calls `provider.getTasks(listId)` again, finds tasks with `parentExternalId` set (new optional field on `ExternalTask` interface), and updates local `Task.parentTaskId` accordingly. No-op for providers that don't populate the field. Generic — future providers (Asana, Jira, Linear) get parent linking for free.
+  - **Verification** (real ClickUp API roundtrip with Personal > 👀 Job Search list, 7 tasks):
+    - Seed script at [scripts/seed-clickup.ts](scripts/seed-clickup.ts) — usage: `npx tsx scripts/seed-clickup.ts [listId]`. Auto-picks smallest list if no arg (non-deterministic — pass list ID explicitly for reproducible runs). Drops token from `CLICKUP_API_TOKEN` env into `ConnectedAccount` + creates Workspace/Project/Mapping + runs sync.
+    - Strict diff check (live ClickUp vs local DB): titles, status, priority, due dates (as ms-epoch), subtask parents. **ALL CLEAN** after fixes.
+    - **One real bug fixed during verify:** [src/lib/task-sync/providers/clickup/clickup-field-mapper.ts:90-103](src/lib/task-sync/providers/clickup/clickup-field-mapper.ts#L90-L103). `dateFromClickUp` was using `setHours(0,0,0,0)` which strips time in LOCAL TZ, causing date-only fields to drift by host TZ offset (4hrs visible on EDT). Fixed to `setUTCHours`. Companion `dateToClickUp` updated to use `getUTC*` for symmetric round-trip.
+- **Working:**
+  - End-to-end PULL: ClickUp List → GoneSquirrel Tasks via `npx tsx scripts/seed-clickup.ts 901708331993`. 7 tasks land correctly, 5 subtasks auto-linked to parent. Idempotent re-runs (0 imported / N updated).
+  - Token in `.env` as `CLICKUP_API_TOKEN="pk_..."`. Active token committed there for dev — **rotate before going public**. Runtime auth reads from `ConnectedAccount.accessToken` DB column, not env (env is just a clipboard for the seed script).
+  - TSC clean, ESLint clean across all new files.
+  - Migration applied; `\d Workspace` confirms table + indexes + FKs.
+- **Broken / not yet verified:**
+  - **PUSH direction (GS → ClickUp) untested.** Creating a Task locally and syncing should create it in ClickUp via `provider.createTask`. Risky because it writes to real ClickUp — test on a throwaway list, not Personal.
+  - **Custom fields (energy + preferredTime)** wiring exists but unexercised. ClickUp Free tier may reject `POST /list/{id}/field` — `ClickUpClient.createCustomField` returns null on 4xx and `ensureCustomFields` falls back gracefully. Test under both Free and paid scenarios.
+  - **Tag color sync** code paths exist but Job Search list has 0 tags. Need a list with tags to verify bg/fg color round-trips.
+  - **Custom statuses** — Personal space uses default `to do` / `complete` statuses. Have NOT tested NILE list with custom statuses (`blocked`, `in review`, etc.). `statusToClickUp`/`From` should preserve them via `TaskProvider.settings.lists[listId].statusMap` but unverified.
+  - **No UI yet.** Settings page has no ClickUp section; sidebar doesn't render Workspace → Project tree; TaskModal has no parent-task selector. All API + DB ready for them.
+  - **Recurrence** — RRULE stays local. ClickUp's recurrence is intentionally not synced. If a synced ClickUp task has `recurrence` set in ClickUp's internal model, our pull ignores it.
+  - `feat/now-mode` branch still permanently diverged (from prior session).
+- **Next concrete task:**
+  1. **Test push direction.** Use a throwaway ClickUp list (NOT Personal > Job Search). Create a Task in GS via Prisma Studio with `projectId` matching the synced project, run sync, confirm task appears in ClickUp via `mcp__claude_ai_ClickUp__clickup_get_task`. Then change title locally, sync, confirm ClickUp updates. Then delete locally, sync, confirm ClickUp deletes.
+  2. **Settings UI for ClickUp.** New section in `src/app/(authenticated)/settings/integrations/` (find the file): token input + validate + persist → space picker (checkbox list) → per-space list picker. All API routes already wired ([src/app/api/integrations/clickup/](src/app/api/integrations/clickup/)).
+  3. **Sidebar Workspace → Project tree.** Find existing project sidebar (grep for `useProjectStore`). Render Workspaces as top-level groups, Projects nested under. Workspaces with `externalSource=CLICKUP` get a small ClickUp badge.
+  4. **TaskModal parent-task field.** [src/components/tasks/TaskModal.tsx](src/components/tasks/TaskModal.tsx) — add a "Parent task" combobox listing other tasks in the same project. Wire to `parentTaskId`.
+  5. **Webhook receiver (post-MVP).** `POST /api/webhooks/clickup` — verify HMAC-SHA256 signature with `webhook.secret`, fetch full task on event, run targeted single-task sync. Pattern: "webhook → enqueue task_id → debounced fetch" (don't trust diff payloads).
+- **Important context for future-me:**
+  - **Hierarchy naming:** GoneSquirrel `Workspace` = Motion `Workspace` = ClickUp `Space`. ClickUp's own top-level "Workspace" (their team) is just `teamId` in API responses. Always be explicit when talking to a non-Motion-aware user: "Workspace (ClickUp Space)".
+  - **Per-list statuses are real:** every ClickUp list has its own `statuses[]` array. NILE > some-list might have `blocked`, `in review`, etc. The sync stores these per-list in `TaskProvider.settings.lists[listId].statusMap`. UI eventually needs to read this map to show valid status options per Project.
+  - **Subtask linking is generic now.** `ExternalTask.parentExternalId` (optional field on the interface) drives the post-pass. Any future provider that supports hierarchy populates this field and gets parent linking for free. Subtasks must be in the same ClickUp List as their parent (API constraint, not ours).
+  - **`task_count` from ClickUp is unreliable.** Personal > Job Search reported `task_count: 0` while actually containing 7 tasks. Don't use list-metadata task counts for capacity planning — always paginate the real endpoint.
+  - **Rate limit on Free tier is 100 req/min.** Per-list polling will burn this fast at scale. Plan to lean on webhooks for production. For now, sync-on-demand only.
+  - **Date-only TZ trap (now patched but worth remembering):** ClickUp sends date-only fields as noon UTC by convention. Use `setUTCHours`/`getUTCHours`, never local-TZ getters/setters, when normalizing.
+  - **Seed script is non-deterministic by default.** ALWAYS pass an explicit listId to `seed-clickup.ts` for reproducible runs. Otherwise its "smallest list" auto-pick varies as ClickUp adjusts task_count.
+  - **Plan + API reference files are at `~/.claude/plans/if-i-want-claude-sorted-kettle*.md`.** Re-read those before touching this integration.
+
+## 2026-05-13 (late evening) — Brand rollout cleanup + LeftRail lockup
+
+- **Phase:** Brand polish + over-engineering recovery.
+- **Did today:**
+  - **Centering refactor experiment (rolled back).** Built `CenteredViewportLayout` primitive + fluid token layer (`--size-icon-sm/md`, `--size-logo`, `text-fluid-hero/headline/body/caption`, `gap-fluid-stack`, `py-fluid-block`) + symmetric body gradients + hid the single-tab "Sign in" TabsList + moved signin to `(open)/auth/signin`. Five commits on top of `7eb5dde`.
+  - User reaction: signin no longer "auto-fit" the screen like the deployed version, and the LeftRail footer disappeared. Root cause: moving signin into `(open)/` meant AppShell no longer wrapped it → no LeftRail → form rendered as a `max-w-md` centered island that felt sparse on ultrawide. Deployed (`(common)/auth/signin`) renders form inside AppShell's `flex-1` main column with LeftRail framing the left edge.
+  - **Reset to `origin/main` (`7eb5dde`)** via `git reset --mixed`, then `git checkout origin/main -- src/app/globals.css src/components/auth/SignInForm.tsx src/app/(common)/auth/signin/page.tsx`. Deleted `src/components/layouts/CenteredViewportLayout.tsx`. Rewrote `BrandSplash.tsx` + `Landing.tsx` with plain `flex items-center justify-center` shells + inline `clamp()` widths — no layout primitive. Single clean commit `b0e4a10` carries the entire brand rollout (splash, landing, brand SVGs, `(open)` route, `loading.tsx`, `metadata.ts`, PWA manifest, AppNav/LeftRail icon swap, root `*.png` gitignore).
+  - **LeftRail header lockup iteration.** Built up to `IconMark` (h-12, w-12) + `/brand/svg/wordmark-green.svg` (h-7, `-ml-2`) flush together so it reads as one lockup. Dark-mode variant via `block dark:hidden` / `hidden dark:block` swap on two `<img>` tags. Commits `cc1f6f0 → 94b7a8f` (5 small steps to dial size + gap).
+  - **Working-tree cleanup:** deleted ~84 root-level iteration screenshots (`landing-*.png`, `signin-*.png`, `splash-*.png`, `v2-*`, `v3-*`, etc.) and added `/*.png` to `.gitignore` so they can't sneak back in.
+  - **Tag `undo-point`** points at `246400f` (dropped HEAD before rollback). Drop with `git tag -d undo-point` once confident none of those 5 commits are needed back.
+- **Working:**
+  - main pushed to origin in this session's last step.
+  - Splash, landing, signin all render correctly. Signin sits inside `(common)/auth/signin` (LeftRail visible with full bottom bar — UserMenu `SB` avatar, Privacy, Theme toggle, Collapse).
+  - LeftRail header expanded: icon-mark + "GoneSquirrel.io" wordmark, single-lockup feel, gap-0 + `-ml-2` on wordmark.
+  - LeftRail header collapsed: icon-mark only at h-12, fits w-16 rail.
+- **Broken:**
+  - **`text-action-on` → dark-text-on-rust bug** still unresolved (brand-rollout-handoff doc item #2). Workaround `!text-white` applied inline on the Landing CTA.
+  - **`UserMenu.tsx:24` has a leftover `console.log("status-------", status)`** — flagged this session, not removed yet.
+  - Brand SVG components use `<img>` tags pointing at `/brand/svg/*.svg` — ESLint warns about `<img>` vs `next/image`. Left as-is for now.
+- **Next concrete task (tomorrow):**
+  1. **Splash + landing + signin design pass** — revisit visual treatment with fresh eyes. Current versions are the simple `flex items-center justify-center` versions from `b0e4a10`, fine but not the destination.
+  2. **Drop the `UserMenu.tsx:24` debug log** (one-line cleanup).
+  3. **Decide whether to fix `text-action-on` token mapping** in `src/components/ui/button.tsx` instead of per-button `!text-white` overrides.
+  4. **Delete `undo-point` tag** once rollback is confirmed not needed: `git tag -d undo-point`.
+- **Important context for future-me:**
+  - **Don't conflate "AppShell route" with "screen-fit".** Pages under `(common)/` inherit LeftRail framing + a `flex-1` main column that auto-fills any viewport. Moving an unauth surface to `(open)/` strips that — on ultrawide, content immediately becomes a small island. Default unauth surfaces under `(common)` unless there's a specific reason to drop the shell.
+  - **Icon SVG internal padding lies about size.** `/brand/svg/icon.svg` is a rounded square with a spiral inside; the spiral occupies ~70% of viewBox so the *visible* mark at `h-7` is ~20px while the bounding box is 28px. To match visual weight of `react-icons` glyphs in nav rows (which fill their box edge-to-edge at `h-5`), the brand IconMark needs ~h-12. Don't size brand marks by box dimensions alone.
+  - **Wordmark + icon spacing:** the icon SVG's right-edge padding *is* the visual space. `gap-0` on the parent flex + `-ml-2` on the wordmark img pulls the wordmark in until visible spiral-to-wordmark distance reads like a single character space. Beats tuning gap units.
+  - **Refactor → reset path:** `git reset --mixed origin/main` then `git checkout origin/main -- <files>` is the surgical way to roll a branch back without losing the working-tree state of the keeper files. Tag the dropped HEAD first so the SHAs aren't lost.
+
