@@ -469,3 +469,38 @@ in 4 days.
   - **Wordmark + icon spacing:** the icon SVG's right-edge padding *is* the visual space. `gap-0` on the parent flex + `-ml-2` on the wordmark img pulls the wordmark in until visible spiral-to-wordmark distance reads like a single character space. Beats tuning gap units.
   - **Refactor → reset path:** `git reset --mixed origin/main` then `git checkout origin/main -- <files>` is the surgical way to roll a branch back without losing the working-tree state of the keeper files. Tag the dropped HEAD first so the SHAs aren't lost.
 
+## 2026-05-14 — ClickUp integration: ship + minimal settings UI
+
+- **Phase:** Wrap-up of in-flight ClickUp task-sync work.
+- **Did today:**
+  - **Live-verified the uncommitted ClickUp pipeline end-to-end** before committing anything: `npm run db:up`, `npx tsx scripts/seed-clickup.ts 901708389490` (forced Financial maintenance list, 4 tasks). 8 tasks imported, subtask parent linking populated for 5 of them in Job Search list. Idempotent on re-run.
+  - **Cleaned the dev DB.** 13 non-ClickUp tasks (E2E TEST + CAVEMAN TEST fixtures, `source IS NULL`) deleted via `DELETE FROM "Task" WHERE source IS NULL`. FK cascades safe — `_TagToTask`, `TaskChunk`, `Task.parentTaskId` all CASCADE; `TaskChange.taskId` SET NULL.
+  - **Phase B committed in 7 chunks** (all hooks passing, all typecheck-clean independently):
+    1. `92f6ba9` feat(db): add workspace + subtask hierarchy
+    2. `553ec3d` feat(task-sync): clickup provider + field mapper
+    3. `5dd8a9f` feat(task-sync): wire clickup provider + subtask parent linking
+    4. `a543c07` feat(api): clickup integration routes
+    5. `c900dfb` chore(scripts): clickup seed for one-off bootstrap
+    6. `3c14989` test(slot-scorer): add parentTaskId to fixture
+    7. `3067d0a` feat(theme): add font-brand utility wired to --font-brand
+  - **Phase C — minimal settings UI shipped.** New `ClickUpIntegrationSettings.tsx` rendered under a new "ClickUp" tab in `src/app/(common)/settings/page.tsx` (added to SettingsTab union, tabs array, allPossibleTabIds, renderContent switch — all 4 touch-points). UI: connect-by-PAT (Input + Button), spaces list with expand→lists, per-list enable Switch, Sync Now + Disconnect. Connection state probed by GETting `/api/integrations/clickup/spaces` (400 → not connected). One file, ~280 LOC including JSX.
+  - **Phase D — Playwright verify on `localhost:3001/settings#clickup`.** 0 console errors. Existing session let me skip auth. Expanded Personal space → 5 lists rendered with task counts. Clicked Sync Now (POST 200 in 19.9s) → DB grew to 15 tasks across 2 projects. Toggled "Planning and review" list switch → POST 200 → Sync Now again (POST 200 in 13.3s) → 4 new tasks imported (now 4 projects, 19 tasks total). Idempotent.
+- **Working:**
+  - Full ClickUp sync flow is end-to-end functional via UI: connect → enable space → enable list → sync → tasks land in local DB with parent-task hierarchy intact.
+  - All 6 API routes (`connect`, `disconnect`, `spaces`, `spaces/[id]/lists`, `spaces/[id]/enable`, `lists/[id]/enable`, `sync-now`) wired and exercised.
+  - Settings page has dedicated "ClickUp" tab between Integrations and Task sync; deep-links via `#clickup` work.
+- **Broken:**
+  - **Jest OOM with default heap** running `slot-scorer-timezone.test.ts` — pre-existing, unrelated to ClickUp. Workaround: `NODE_OPTIONS="--max-old-space-size=4096" npx jest ... --runInBand` passes. Real fix is in jest config, not on the ClickUp critical path.
+  - **`_clickup-http.ts` throwaway helper** still lives at `src/app/api/integrations/clickup/_clickup-http.ts`. Audit flagged it as a Phase 2 placeholder to remove once `ClickUpProvider` is in use — still imported by `connect/`, `disconnect/`, `spaces/`, `spaces/[id]/lists/`. Refactoring those routes to use `ClickUpProvider.validateConnection()` etc. is the cleanup, not scoped for today.
+- **Next concrete task:**
+  1. **Webhooks (Phase 4).** `createWebhook()` in `ClickUpClient` is stubbed. Implement: gate behind `CLICKUP_WEBHOOKS_ENABLED`, POST `/team/{teamId}/webhook` with our endpoint URL + filter list, store `webhook_id` + signing secret on `TaskProvider.settings`. Receiver at `POST /api/webhooks/clickup` verifies HMAC-SHA256 with the secret, fetches the full task on event, runs targeted single-task sync.
+  2. **Tests.** No unit tests for `ClickUpFieldMapper`, `ClickUpProvider`, or the 7 API routes. At minimum: round-trip tests for priority/status/date mapping, and a happy-path integration test for `/sync-now` using a mock `ClickUpClient`.
+  3. **Retry/backoff.** `TaskListMapping.error` is set on failure but there's no automatic re-attempt. Add exponential backoff to sync-now path.
+  4. **Drop `_clickup-http.ts`.** Refactor the 4 remaining API-route callsites to use `ClickUpProvider`/`ClickUpClient` directly, then delete the helper.
+  5. **Disable flow.** Switches go disabled once enabled — there's no way to un-enable a list/space from the UI besides Disconnect (which archives everything). Add a "disable list" PATCH route + UI handler.
+- **Important context for future-me:**
+  - **Token comes from `.env` quoted.** `CLICKUP_API_TOKEN="pk_..."` — the seed script and ClickUp REST calls need the quotes stripped before passing as the Authorization header. The ClickUp helper `clickUpFetch` (and Prisma round-tripping through `ConnectedAccount.accessToken`) handles this fine because Prisma strips the literal quotes on save, but raw `grep | cut` from the env keeps them. Bit me once today.
+  - **`task_count` field on ClickUp lists is still unreliable** (carried over from prior session). PMP list shows 0 task_count and actually has 0 tasks; Financial shows 4 and actually has 4 (returned 8 ExternalTasks because of recurring task instances each becoming a separate record). The "8 imported from a list of 4" surprise is recurrence, not duplication.
+  - **Hash-routed settings tabs** require 4 sync points: `SettingsTab` union, `tabs` array, `allPossibleTabIds` array, `renderContent` switch. Miss the 3rd one and deep-links silently drop to default. Worth a helper if more tabs land.
+  - **Connection probe via `/spaces` GET** is OK for now but couples connection state to that endpoint's failure modes. If `/spaces` ever returns 400 for "team exists but has no spaces" we'd misclassify as not-connected. Worth a dedicated `/status` route if this gets touched again.
+
