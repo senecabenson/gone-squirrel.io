@@ -63,8 +63,8 @@ export function LeftRail() {
       <Link
         href="/calendar"
         className={cn(
-          "mb-section flex items-center gap-2",
-          collapsed ? "justify-center px-0" : "px-2"
+          "mb-section flex items-center",
+          collapsed ? "justify-center px-0" : "gap-1 px-2"
         )}
         aria-label="GoneSquirrel home"
         title={collapsed ? "GoneSquirrel" : undefined}
