@@ -12,7 +12,7 @@ datasource db {
 
 model ConnectedAccount {
   id             String         @id @default(cuid())
-  provider       String // "GOOGLE" | "OUTLOOK" | "CALDAV"
+  provider       String // "GOOGLE" | "OUTLOOK" | "CALDAV" | "CLICKUP"
   email          String
   accessToken    String
   refreshToken   String?
@@ -79,12 +79,40 @@ model User {
   dataSettings         DataSettings?
   tasks                Task[]
   projects             Project[]
+  workspaces           Workspace[]
   connectedAccounts    ConnectedAccount[]
   tags                 Tag[]
   JobRecord            JobRecord[]
   taskProviders        TaskProvider[]
   TaskChange           TaskChange[]
   PasswordReset        PasswordReset[]
+}
+
+model Workspace {
+  id     String  @id @default(cuid())
+  name   String
+  color  String?
+  status String  @default("active") // "active" | "archived"
+
+  // External mapping (e.g., ClickUp Space)
+  externalId     String?
+  externalSource String? // "CLICKUP"
+  lastSyncedAt   DateTime?
+
+  // User
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Children
+  projects Project[]
+  tags     Tag[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, externalId, externalSource])
+  @@index([userId])
+  @@index([externalId, externalSource])
 }
 
 model VerificationToken {
@@ -173,6 +201,10 @@ model Project {
   externalSource String?
   lastSyncedAt   DateTime?
 
+  // Workspace (Motion-style hierarchy; for ClickUp, mirrors ClickUp Space)
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
   // User relationship
   userId String?
   user   User?   @relation(fields: [userId], references: [id])
@@ -183,6 +215,7 @@ model Project {
 
   @@index([status])
   @@index([userId])
+  @@index([workspaceId])
   @@index([externalId, externalSource])
 }
 
@@ -201,8 +234,8 @@ model Task {
   preferredTime String? // enum: 'morning', 'afternoon', 'evening'
 
   // Task Chunking (Now Mode)
-  chunkMin Int        @default(15)
-  chunkMax Int        @default(60)
+  chunkMin Int         @default(15)
+  chunkMax Int         @default(60)
   chunks   TaskChunk[]
 
   // Auto-scheduling
@@ -254,11 +287,17 @@ model Task {
   projectId String?
   project   Project? @relation(fields: [projectId], references: [id])
 
+  // Subtask hierarchy (mirrors ClickUp parent/subtask)
+  parentTaskId String?
+  parentTask   Task?   @relation("Subtasks", fields: [parentTaskId], references: [id], onDelete: Cascade)
+  subtasks     Task[]  @relation("Subtasks")
+
   @@index([status])
   @@index([dueDate])
   @@index([startDate])
   @@index([priority])
   @@index([projectId])
+  @@index([parentTaskId])
   @@index([isRecurring])
   @@index([isAutoScheduled])
   @@index([scheduledStart, scheduledEnd])
@@ -272,20 +311,20 @@ model Task {
 }
 
 model TaskChunk {
-  id              String   @id @default(cuid())
-  task            Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  taskId          String
-  chunkIndex      Int
-  totalChunks     Int
-  durationMin     Int
-  status          String   @default("todo")
-  scheduledStart  DateTime?
-  scheduledEnd    DateTime?
-  googleEventId   String?
-  startedAt       DateTime?
-  completedAt     DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String    @id @default(cuid())
+  task           Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId         String
+  chunkIndex     Int
+  totalChunks    Int
+  durationMin    Int
+  status         String    @default("todo")
+  scheduledStart DateTime?
+  scheduledEnd   DateTime?
+  googleEventId  String?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@unique([taskId, chunkIndex])
   @@index([taskId])
@@ -293,18 +332,27 @@ model TaskChunk {
 }
 
 model Tag {
-  id    String  @id @default(cuid())
-  name  String
-  color String?
-  tasks Task[]
+  id      String  @id @default(cuid())
+  name    String
+  color   String? // background color (maps to ClickUp tag_bg)
+  fgColor String? // foreground color (maps to ClickUp tag_fg)
+  tasks   Task[]
+
+  // External source ("CLICKUP" when imported)
+  externalSource String?
+
+  // Workspace scoping (mirrors ClickUp per-Space tag scoping; nullable = global)
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
 
   // User relationship
   userId String?
   user   User?   @relation(fields: [userId], references: [id])
 
-  @@unique([name, userId])
+  @@unique([name, userId, workspaceId])
   @@index([name])
   @@index([userId])
+  @@index([workspaceId])
 }
 
 model AutoScheduleSettings {
