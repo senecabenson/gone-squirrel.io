@@ -64,6 +64,7 @@ const makeTask = (overrides: Partial<Task> = {}): Task => ({
   chunkMax: 60,
   userId: "user-1",
   projectId: null,
+  parentTaskId: null,
   createdAt: new Date(),
   updatedAt: new Date(),
   ...overrides,
