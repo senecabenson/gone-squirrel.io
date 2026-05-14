@@ -489,6 +489,7 @@ in 4 days.
   - Full ClickUp sync flow is end-to-end functional via UI: connect → enable space → enable list → sync → tasks land in local DB with parent-task hierarchy intact.
   - All 6 API routes (`connect`, `disconnect`, `spaces`, `spaces/[id]/lists`, `spaces/[id]/enable`, `lists/[id]/enable`, `sync-now`) wired and exercised.
   - Settings page has dedicated "ClickUp" tab between Integrations and Task sync; deep-links via `#clickup` work.
+  - **Pushed `ca41f5c..9a9adab` to `origin/main`** — 9 commits live. No PR (repo convention is direct push).
 - **Broken:**
   - **Jest OOM with default heap** running `slot-scorer-timezone.test.ts` — pre-existing, unrelated to ClickUp. Workaround: `NODE_OPTIONS="--max-old-space-size=4096" npx jest ... --runInBand` passes. Real fix is in jest config, not on the ClickUp critical path.
   - **`_clickup-http.ts` throwaway helper** still lives at `src/app/api/integrations/clickup/_clickup-http.ts`. Audit flagged it as a Phase 2 placeholder to remove once `ClickUpProvider` is in use — still imported by `connect/`, `disconnect/`, `spaces/`, `spaces/[id]/lists/`. Refactoring those routes to use `ClickUpProvider.validateConnection()` etc. is the cleanup, not scoped for today.
