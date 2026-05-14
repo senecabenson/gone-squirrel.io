@@ -69,9 +69,21 @@ export function LeftRail() {
         aria-label="GoneSquirrel home"
         title={collapsed ? "GoneSquirrel" : undefined}
       >
-        <IconMark className="w-8 h-8" />
-        {!collapsed && (
-          <span className="font-display text-h2 text-ink">GoneSquirrel</span>
+        {collapsed ? (
+          <IconMark className="w-8 h-8" />
+        ) : (
+          <>
+            <img
+              src="/brand/svg/lockup-horizontal.svg"
+              alt="GoneSquirrel.io"
+              className="block h-8 w-auto dark:hidden"
+            />
+            <img
+              src="/brand/svg/lockup-horizontal-dark.svg"
+              alt="GoneSquirrel.io"
+              className="hidden h-8 w-auto dark:block"
+            />
+          </>
         )}
       </Link>
 
