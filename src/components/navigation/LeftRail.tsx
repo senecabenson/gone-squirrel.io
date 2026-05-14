@@ -64,12 +64,12 @@ export function LeftRail() {
         href="/calendar"
         className={cn(
           "mb-section flex items-center",
-          collapsed ? "justify-center px-0" : "gap-1 px-2"
+          collapsed ? "justify-center px-0" : "gap-0.5 px-2"
         )}
         aria-label="GoneSquirrel home"
         title={collapsed ? "GoneSquirrel" : undefined}
       >
-        <IconMark className="h-10 w-10 shrink-0" />
+        <IconMark className="h-7 w-7 shrink-0" />
         {!collapsed && (
           <>
             <img
