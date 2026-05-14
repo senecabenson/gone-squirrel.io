@@ -42,6 +42,9 @@ export interface ExternalTask {
   lastModified?: Date;
   lastModifiedDateTime?: string;
   url?: string;
+  // ID of the parent task in the external system (subtask hierarchy).
+  // Resolved to local Task.parentTaskId in a post-sync pass.
+  parentExternalId?: string | null;
 }
 
 /**
