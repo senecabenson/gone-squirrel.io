@@ -1,27 +1,34 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
-/**
- * Public root for the open build. Personal-use fork — no marketing landing
- * needed. Punt straight to the calendar (if signed in) or sign-in.
- */
+import BrandSplash from "@/components/brand/BrandSplash";
+import Landing from "@/components/landing/Landing";
+
+const MIN_SPLASH_MS = 1800;
+
 export default function HomeRedirect() {
   const { status } = useSession();
   const router = useRouter();
+  const [minHeld, setMinHeld] = useState(false);
 
   useEffect(() => {
-    if (status === "loading") return;
-    router.replace(status === "authenticated" ? "/calendar" : "/auth/signin");
-  }, [status, router]);
+    const t = setTimeout(() => setMinHeld(true), MIN_SPLASH_MS);
+    return () => clearTimeout(t);
+  }, []);
 
-  return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-2 bg-canvas">
-      <span className="block h-3 w-3 animate-pulse rounded-full bg-action" />
-      <p className="text-body-sm text-ink-soft">One moment.</p>
-    </div>
-  );
+  useEffect(() => {
+    if (minHeld && status === "authenticated") {
+      router.replace("/calendar");
+    }
+  }, [minHeld, status, router]);
+
+  if (!minHeld || status === "loading" || status === "authenticated") {
+    return <BrandSplash />;
+  }
+
+  return <Landing />;
 }

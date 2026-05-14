@@ -1,7 +1,7 @@
 import { Providers } from "@/components/providers";
 import { metadata as baseMetadata } from "./metadata";
 import { cn } from "@/lib/utils";
-import { Fraunces, Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
+import { Fraunces, Plus_Jakarta_Sans, JetBrains_Mono, Nunito } from "next/font/google";
 
 const displayFont = Fraunces({
   subsets: ["latin"],
@@ -23,6 +23,14 @@ const monoFont = JetBrains_Mono({
   variable: "--font-mono",
 });
 
+const brandFont = Nunito({
+  subsets: ["latin"],
+  weight: ["600", "700", "800"],
+  style: ["normal", "italic"],
+  variable: "--font-brand",
+  display: "swap",
+});
+
 export const metadata = baseMetadata;
 
 export default function RootLayout({
@@ -33,7 +41,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={cn("h-full", displayFont.variable, bodyFont.variable, monoFont.variable)}
+      className={cn("h-full", displayFont.variable, bodyFont.variable, monoFont.variable, brandFont.variable)}
       suppressHydrationWarning
     >
       <body className="flex h-full flex-col bg-background">

@@ -1,7 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
+
+import { IconMark } from "@/components/brand/svg/IconMark";
 import { usePathname } from "next/navigation";
 
 import {
@@ -68,7 +69,7 @@ export function LeftRail() {
         aria-label="GoneSquirrel home"
         title={collapsed ? "GoneSquirrel" : undefined}
       >
-        <Image src="/logo.svg" alt="" width={24} height={24} />
+        <IconMark className="w-8 h-8" />
         {!collapsed && (
           <span className="font-display text-h2 text-ink">GoneSquirrel</span>
         )}

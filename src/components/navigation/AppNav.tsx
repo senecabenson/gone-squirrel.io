@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
+import { IconMark } from "@/components/brand/svg/IconMark";
 import { usePathname } from "next/navigation";
 
 import { BsListTask, BsCalendar } from "react-icons/bs";
@@ -57,13 +57,10 @@ export function AppNav({ className }: AppNavProps) {
                 pathname === "/calendar" ? "text-primary" : "text-foreground hover:text-primary"
               )}
             >
-              <Image
-                src="/logo.svg"
-                alt="Calendar Logo"
-                width={28}
-                height={28}
-                className="mr-2"
-              />
+              <IconMark className="w-8 h-8 mr-2" />
+              <span className="font-display text-h3 text-ink">
+                GoneSquirrel.io
+              </span>
             </Link>
             {links.map((link) => {
               const Icon = link.icon;
