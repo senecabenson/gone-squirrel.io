@@ -183,6 +183,11 @@ export class ClickUpClient {
     return data.spaces ?? [];
   }
 
+  /** GET /space/{spaceId} */
+  async getSpace(spaceId: string): Promise<ClickUpSpace> {
+    return this.request<ClickUpSpace>("GET", `/space/${spaceId}`);
+  }
+
   /** GET /space/{spaceId}/folder?archived=false */
   async getFolders(spaceId: string): Promise<ClickUpFolder[]> {
     const data = await this.request<ClickUpFoldersResponse>(

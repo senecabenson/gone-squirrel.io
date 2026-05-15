@@ -3,30 +3,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest } from "@/lib/auth/api-auth";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
-
-import { clickUpFetch } from "../../../_clickup-http";
+import {
+  ClickUpApiError,
+  ClickUpClient,
+} from "@/lib/task-sync/providers/clickup/clickup-client";
 
 const LOG_SOURCE = "clickup-integration";
-
-interface ClickUpList {
-  id: string;
-  name: string;
-  task_count: number | null;
-}
-
-interface ClickUpFolder {
-  id: string;
-  name: string;
-  lists: ClickUpList[];
-}
-
-interface ClickUpFolderlessListsResponse {
-  lists: ClickUpList[];
-}
-
-interface ClickUpFoldersResponse {
-  folders: ClickUpFolder[];
-}
 
 interface ListItem {
   id: string;
@@ -67,22 +49,19 @@ export async function GET(
       );
     }
 
-    const token = account.accessToken;
+    const client = new ClickUpClient(account.accessToken);
 
-    // Fetch folderless lists and folders in parallel
-    const [folderlessData, foldersData] = await Promise.all([
-      clickUpFetch<ClickUpFolderlessListsResponse>(
-        token,
-        `/space/${spaceId}/list`
-      ),
-      clickUpFetch<ClickUpFoldersResponse>(token, `/space/${spaceId}/folder`),
+    // Fetch folderless lists and folders in parallel (client appends ?archived=false)
+    const [folderlessLists, folders] = await Promise.all([
+      client.getFolderlessLists(spaceId),
+      client.getFolders(spaceId),
     ]);
 
     // Collect all list IDs so we can check local enablement in one query
     const allLists: ListItem[] = [];
 
     // Folderless lists
-    for (const list of folderlessData.lists) {
+    for (const list of folderlessLists) {
       allLists.push({
         id: list.id,
         name: list.name,
@@ -93,8 +72,8 @@ export async function GET(
     }
 
     // Lists inside folders
-    for (const folder of foldersData.folders) {
-      for (const list of folder.lists) {
+    for (const folder of folders) {
+      for (const list of folder.lists ?? []) {
         allLists.push({
           id: list.id,
           name: list.name,
@@ -128,6 +107,12 @@ export async function GET(
 
     return NextResponse.json({ lists: annotatedLists });
   } catch (error) {
+    if (error instanceof ClickUpApiError && error.status === 401) {
+      return NextResponse.json(
+        { error: "ClickUp token rejected" },
+        { status: 401 }
+      );
+    }
     logger.error(
       "Failed to list ClickUp lists for space",
       { error: error instanceof Error ? error.message : String(error) },

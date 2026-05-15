@@ -5,23 +5,13 @@ import { z } from "zod";
 import { authenticateRequest } from "@/lib/auth/api-auth";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
-
-import { clickUpFetch } from "../_clickup-http";
+import {
+  ClickUpApiError,
+  ClickUpClient,
+} from "@/lib/task-sync/providers/clickup/clickup-client";
+import type { ClickUpTeam } from "@/lib/task-sync/providers/clickup/types";
 
 const LOG_SOURCE = "clickup-integration";
-
-// ClickUp /team response shape (partial)
-interface ClickUpTeam {
-  id: string;
-  name: string;
-  color: string;
-  avatar: string | null;
-  members: unknown[];
-}
-
-interface ClickUpTeamsResponse {
-  teams: ClickUpTeam[];
-}
 
 const connectBodySchema = z.object({
   token: z.string().min(1),
@@ -53,13 +43,12 @@ export async function POST(request: NextRequest) {
     const { token } = parsed.data;
 
     // Validate token by calling ClickUp API
-    let teamsResponse: ClickUpTeamsResponse;
+    let teams: ClickUpTeam[];
     try {
-      teamsResponse = await clickUpFetch<ClickUpTeamsResponse>(token, "/team");
+      const client = new ClickUpClient(token);
+      teams = await client.getTeams();
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      // A 401 from ClickUp surfaces as "ClickUp API error 401: ..."
-      if (message.includes("401")) {
+      if (err instanceof ClickUpApiError && err.status === 401) {
         logger.warn(
           "Invalid ClickUp token provided",
           { userId },
@@ -130,11 +119,11 @@ export async function POST(request: NextRequest) {
 
     logger.info(
       "ClickUp account connected",
-      { userId, teamCount: teamsResponse.teams.length },
+      { userId, teamCount: teams.length },
       LOG_SOURCE
     );
 
-    return NextResponse.json({ ok: true, teams: teamsResponse.teams });
+    return NextResponse.json({ ok: true, teams });
   } catch (error) {
     logger.error(
       "Failed to connect ClickUp account",

@@ -3,22 +3,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest } from "@/lib/auth/api-auth";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
-
-import { clickUpFetch } from "../../../_clickup-http";
+import {
+  ClickUpApiError,
+  ClickUpClient,
+} from "@/lib/task-sync/providers/clickup/clickup-client";
 
 const LOG_SOURCE = "clickup-integration";
-
-interface ClickUpListSpace {
-  id: string;
-  name: string;
-}
-
-interface ClickUpListResponse {
-  id: string;
-  name: string;
-  task_count: number | null;
-  space: ClickUpListSpace;
-}
 
 /**
  * POST /api/integrations/clickup/lists/[listId]/enable
@@ -51,10 +41,15 @@ export async function POST(
     }
 
     // Fetch list info from ClickUp — includes parent space
-    const list = await clickUpFetch<ClickUpListResponse>(
-      account.accessToken,
-      `/list/${listId}`
-    );
+    const client = new ClickUpClient(account.accessToken);
+    const list = await client.getList(listId);
+
+    if (!list.space?.id) {
+      return NextResponse.json(
+        { error: "ClickUp list missing parent space" },
+        { status: 500 }
+      );
+    }
 
     // Find the parent Workspace (must already be enabled)
     const parentWorkspace = await prisma.workspace.findFirst({
@@ -150,6 +145,12 @@ export async function POST(
 
     return NextResponse.json({ project });
   } catch (error) {
+    if (error instanceof ClickUpApiError && error.status === 401) {
+      return NextResponse.json(
+        { error: "ClickUp token rejected" },
+        { status: 401 }
+      );
+    }
     logger.error(
       "Failed to enable ClickUp list",
       { error: error instanceof Error ? error.message : String(error) },

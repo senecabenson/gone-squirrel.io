@@ -117,6 +117,7 @@ export interface ClickUpList {
   permission_level?: string;
   start_date?: ClickUpMs;
   due_date?: ClickUpMs;
+  task_count?: number | null;
 }
 
 // ---------------------------------------------------------------------------

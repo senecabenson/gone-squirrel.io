@@ -3,16 +3,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest } from "@/lib/auth/api-auth";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
-
-import { clickUpFetch } from "../../../_clickup-http";
+import {
+  ClickUpApiError,
+  ClickUpClient,
+} from "@/lib/task-sync/providers/clickup/clickup-client";
 
 const LOG_SOURCE = "clickup-integration";
-
-interface ClickUpSpaceResponse {
-  id: string;
-  name: string;
-  color: string | null;
-}
 
 /**
  * POST /api/integrations/clickup/spaces/[spaceId]/enable
@@ -45,10 +41,8 @@ export async function POST(
     }
 
     // Fetch space info from ClickUp
-    const space = await clickUpFetch<ClickUpSpaceResponse>(
-      account.accessToken,
-      `/space/${spaceId}`
-    );
+    const client = new ClickUpClient(account.accessToken);
+    const space = await client.getSpace(spaceId);
 
     // Upsert local Workspace
     const workspace = await prisma.workspace.upsert({
@@ -82,6 +76,12 @@ export async function POST(
 
     return NextResponse.json({ workspace });
   } catch (error) {
+    if (error instanceof ClickUpApiError && error.status === 401) {
+      return NextResponse.json(
+        { error: "ClickUp token rejected" },
+        { status: 401 }
+      );
+    }
     logger.error(
       "Failed to enable ClickUp space",
       { error: error instanceof Error ? error.message : String(error) },

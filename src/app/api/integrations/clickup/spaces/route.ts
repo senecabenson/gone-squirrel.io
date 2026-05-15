@@ -3,33 +3,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest } from "@/lib/auth/api-auth";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
-
-import { clickUpFetch } from "../_clickup-http";
+import {
+  ClickUpApiError,
+  ClickUpClient,
+} from "@/lib/task-sync/providers/clickup/clickup-client";
 
 const LOG_SOURCE = "clickup-integration";
-
-interface ClickUpSpace {
-  id: string;
-  name: string;
-  color: string | null;
-  private: boolean;
-  statuses: unknown[];
-  multiple_assignees: boolean;
-  features: Record<string, unknown>;
-}
-
-interface ClickUpSpacesResponse {
-  spaces: ClickUpSpace[];
-}
-
-interface ClickUpTeam {
-  id: string;
-  name: string;
-}
-
-interface ClickUpTeamsResponse {
-  teams: ClickUpTeam[];
-}
 
 /**
  * GET /api/integrations/clickup/spaces
@@ -57,11 +36,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const token = account.accessToken;
+    const client = new ClickUpClient(account.accessToken);
 
     // Get first team ID
-    const teamsData = await clickUpFetch<ClickUpTeamsResponse>(token, "/team");
-    const firstTeam = teamsData.teams[0];
+    const teams = await client.getTeams();
+    const firstTeam = teams[0];
 
     if (!firstTeam) {
       return NextResponse.json(
@@ -70,11 +49,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Fetch spaces for that team
-    const spacesData = await clickUpFetch<ClickUpSpacesResponse>(
-      token,
-      `/team/${firstTeam.id}/space?archived=false`
-    );
+    // Fetch spaces for that team (client appends ?archived=false)
+    const spaceList = await client.getSpaces(firstTeam.id);
 
     // Fetch local workspaces for this user to determine enablement
     const localWorkspaces = await prisma.workspace.findMany({
@@ -90,7 +66,7 @@ export async function GET(request: NextRequest) {
       localWorkspaces.map((w) => w.externalId).filter(Boolean)
     );
 
-    const spaces = spacesData.spaces.map((space) => ({
+    const spaces = spaceList.map((space) => ({
       id: space.id,
       name: space.name,
       color: space.color ?? null,
@@ -99,6 +75,12 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ spaces });
   } catch (error) {
+    if (error instanceof ClickUpApiError && error.status === 401) {
+      return NextResponse.json(
+        { error: "ClickUp token rejected" },
+        { status: 401 }
+      );
+    }
     logger.error(
       "Failed to list ClickUp spaces",
       { error: error instanceof Error ? error.message : String(error) },
