@@ -530,3 +530,25 @@ in 4 days.
   - **`ClickUpList.space` is optional** (`space?: { id, name, access }`). `lists/[id]/enable` needs a guard before `list.space.id` access; added one that returns 500 with `"ClickUp list missing parent space"` if absent. ClickUp's docs imply space is always present on a list-detail response, but the type is correct.
   - **Connection-state probe still couples to `/spaces` returning 400 when `ConnectedAccount` is missing.** This refactor preserved that path (the 400 returns before any `ClickUpClient` construction). If you ever change that return to 401, the UI's "not connected" detection breaks.
 
+## 2026-05-15 (later) — Webhook (Phase 4) scoped, not yet shipped
+
+- **Phase:** Planning only. No code changes this entry. Deferred-queue item promoted from #5 → next-session #1 once the user confirmed prod URL exists.
+- **Did today:**
+  - **Discovered prod infra** via Hostinger browser terminal: app at `/opt/gonesquirrel/`, Docker compose, Traefik (`root-traefik-1`) handles 443→app:3000 with auto Let's Encrypt, Postgres co-located (`gonesquirrelio-db-1` — note: different name than dev's `gonesquirrel-db-1`, but actually identical based on `docker ps` output — verify before prod psql queries), Cloudflare tunnel sidecar (`cloudflared-zrep-cloudflared-1`) also routing some traffic. Prod env file: `/opt/gonesquirrel/.env.production`. Deploy script: `/opt/gonesquirrel/scripts/deploy.sh`.
+  - **Confirmed `ClickUpClient.createWebhook()` stub exists** (`clickup-client.ts:384`), gated on `CLICKUP_WEBHOOKS_ENABLED==="true"`. Returns `null` when gated.
+  - **Wrote approved plan file** at `~/.claude/plans/continuing-clickup-integration-read-hashed-music.md` covering: one team-wide webhook per user, HMAC-SHA256 verify with `timingSafeEqual`, `syncSingleExternalTask` helper on `ClickUpProvider`, re-connect cleanup, disconnect cleanup, env vars (`CLICKUP_WEBHOOKS_ENABLED`, `WEBHOOK_BASE_URL`), agent-router routing table (10 Sonnet / 3 Haiku tasks). Plan includes the user's explicit E2E sequence: sync → add task in ClickUp → confirm autosync without clicking Sync Now → edit/status/delete propagation → unmapped-list skip → disconnect cleanup.
+- **Working:** Cleanup `_clickup-http` shipped earlier today on `c2b9071`. Webhook surface untouched.
+- **Broken:** Nothing new. `createWebhook` is dead code until `CLICKUP_WEBHOOKS_ENABLED=true` set and connect-route registration block added.
+- **Deferred queue reshuffled** (post-cleanup, pre-webhook):
+  1. **Webhooks (Phase 4)** — plan approved, execute next session.
+  2. Tests — `ClickUpFieldMapper` round-trips + `/sync-now` happy path with mocked `ClickUpClient`.
+  3. Disable flow — PATCH route + UI un-toggle without Disconnect.
+  4. Retry/backoff on `sync-now` failures.
+- **Important context for future-me:**
+  - **Task model has NO `@@unique` on `(externalTaskId, userId)`** — only `@@index`. `prisma.task.upsert` does NOT work. Use the `findFirst` + conditional `create`/`update` pattern from `task-sync-manager.ts:485+`. Don't waste time trying upsert and getting a Prisma error.
+  - **`ClickUpProvider.parseProviderSettings()`** at `clickup-provider.ts:738` already exists for typed settings reads. Reuse it instead of writing a new cast.
+  - **`ClickUpProviderSettings` is private** (`clickup-provider.ts:70`). Export it before adding webhook fields.
+  - **Webhook receiver MUST read raw body before any JSON parse** (`Buffer.from(await request.arrayBuffer())`). Using `request.json()` first consumes the stream and breaks HMAC.
+  - **Prod env edits = nano + deploy script.** `cd /opt/gonesquirrel && nano .env.production && ./scripts/deploy.sh`. There's no auto-deploy on push to `main` — must SSH (or Hostinger browser terminal) and run the script manually.
+  - **Localhost can't receive ClickUp webhooks** — dev stays manual-sync. Cloudflare tunnel for dev autosync is out of scope for the webhook session.
+
