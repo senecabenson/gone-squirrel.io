@@ -505,3 +505,28 @@ in 4 days.
   - **Hash-routed settings tabs** require 4 sync points: `SettingsTab` union, `tabs` array, `allPossibleTabIds` array, `renderContent` switch. Miss the 3rd one and deep-links silently drop to default. Worth a helper if more tabs land.
   - **Connection probe via `/spaces` GET** is OK for now but couples connection state to that endpoint's failure modes. If `/spaces` ever returns 400 for "team exists but has no spaces" we'd misclassify as not-connected. Worth a dedicated `/status` route if this gets touched again.
 
+## 2026-05-15 — ClickUp cleanup: drop `_clickup-http` throwaway
+
+- **Phase:** Deferred-queue item #1 from last session.
+- **Did today:**
+  - **Refactored 5 integration routes** off the Phase-2 `clickUpFetch` helper onto `ClickUpClient`: `connect`, `spaces`, `spaces/[id]/enable`, `spaces/[id]/lists`, `lists/[id]/enable`. Audit had said 4 importers; grep showed 5 (the prior session's notes line 495 was correct — the audit missed `spaces/[id]/enable` and `lists/[id]/enable`).
+  - **Added `ClickUpClient.getSpace(spaceId)`** — single-space GET needed by `spaces/[id]/enable` (no public `request<T>`; it's private). `getList(listId)` already existed.
+  - **Added `task_count?: number | null` to `ClickUpList` type** — was on inline DTOs, missing from the shared type.
+  - **Switched 401 detection** from `message.includes("401")` to `err instanceof ClickUpApiError && err.status === 401` everywhere. Added 401-pass-through guards to `spaces`, `spaces/[id]/enable`, `spaces/[id]/lists`, `lists/[id]/enable` (none had one before — previously all errors masked as 500).
+  - **Live-verified on `localhost:3001/settings#clickup`** before commit: page loaded with Personal space connected (GET `/spaces` 200 ×2), expanded Personal (GET `/spaces/{id}/lists` 200 ×2 — once on mount, once after toggle), toggled "Home setup" on (POST `/lists/{id}/enable` 200), clicked Sync Now (POST `/sync-now` 200 in 25.4s, DB grew 19 → 21). Zero console errors throughout.
+  - **Deleted `_clickup-http.ts`** and confirmed `grep -r '_clickup-http' src/` returns nothing.
+  - **Committed `a438dc8` and pushed to `origin/main`.** Net -82 LOC.
+- **Working:** All five refactored routes hit live and returned 200. Sync path unchanged (already used `ClickUpClient` via `TaskSyncManager`).
+- **Broken:** Nothing new. The Jest OOM workaround from yesterday still stands; not on this critical path.
+- **Behavioral fix shipped silently:** `spaces/[id]/lists` previously omitted `?archived=false` on the `/space/{id}/list` and `/space/{id}/folder` calls. `ClickUpClient.getFolderlessLists` and `getFolders` both append it. Archived ClickUp lists/folders will no longer surface in the UI — intended.
+- **Deferred queue updated** (~~strikethrough~~ = done):
+  1. ~~Drop `_clickup-http.ts` throwaway~~ ✅ shipped today.
+  2. **Tests** — `ClickUpFieldMapper` round-trips (priority/status/date) + `/sync-now` happy path with mocked `ClickUpClient`. Now next.
+  3. Disable flow — PATCH route + UI un-toggle for spaces/lists without Disconnect.
+  4. Retry/backoff on `sync-now` failures.
+  5. Webhooks (Phase 4).
+- **Important context for future-me:**
+  - **`ClickUpClient.request<T>` is private.** Anything new that needs a one-off endpoint must be added as a public method on the class (not callable from outside). When in doubt, mirror existing patterns: `getSpace`, `getList`, `getTask`.
+  - **`ClickUpList.space` is optional** (`space?: { id, name, access }`). `lists/[id]/enable` needs a guard before `list.space.id` access; added one that returns 500 with `"ClickUp list missing parent space"` if absent. ClickUp's docs imply space is always present on a list-detail response, but the type is correct.
+  - **Connection-state probe still couples to `/spaces` returning 400 when `ConnectedAccount` is missing.** This refactor preserved that path (the 400 returns before any `ClickUpClient` construction). If you ever change that return to 401, the UI's "not connected" detection breaks.
+
