@@ -369,6 +369,12 @@ model AutoScheduleSettings {
   selectedCalendars String @default("[]") // JSON string of calendar IDs
   bufferMinutes     Int    @default(15)
 
+  // Scheduling Blocks (Task Blocks calendar)
+  taskBlocksFeedId      String? // CalendarFeed.id of the "Task Blocks" calendar; null = feature off
+  blockTypeMap          String  @default("[]") // JSON BlockTypeRule[]
+  noEligibleBlockPolicy String  @default("schedule_nothing") // 'schedule_nothing' | 'fallback_work_hours'
+  skipReflowBlockType   String  @default("light") // 'light' | 'deep' | 'free'
+
   // Energy Level Mappings
   highEnergyStart   Int? // 0-23
   highEnergyEnd     Int? // 0-23

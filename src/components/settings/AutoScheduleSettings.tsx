@@ -94,6 +94,59 @@ export function AutoScheduleSettings() {
       </SettingRow>
 
       <SettingRow
+        label="Task Blocks Calendar"
+        description="Pick the calendar that defines your day's blocks (🧠 Deep Work / 🪶 Light Work / protected family & health time). When set, work tasks are only scheduled inside daytime Deep/Light Work blocks matched to the task's energy level; every other block is protected."
+      >
+        <div className="space-y-3">
+          <Select
+            value={autoSchedule.taskBlocksFeedId ?? "none"}
+            onValueChange={(value) =>
+              updateAutoScheduleSettings({
+                taskBlocksFeedId: value === "none" ? null : value,
+              })
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Off — flat working hours" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Off — flat working hours</SelectItem>
+              {feeds.map((feed) => (
+                <SelectItem key={feed.id} value={feed.id}>
+                  {feed.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div>
+            <Label className="text-sm">
+              When a day has no matching work block
+            </Label>
+            <Select
+              value={autoSchedule.noEligibleBlockPolicy}
+              onValueChange={(value) =>
+                updateAutoScheduleSettings({
+                  noEligibleBlockPolicy: value,
+                })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="schedule_nothing">
+                  Schedule nothing (protect the day)
+                </SelectItem>
+                <SelectItem value="fallback_work_hours">
+                  Fall back to flat working hours
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </SettingRow>
+
+      <SettingRow
         label="Working Hours"
         description="Set your preferred working hours for task scheduling"
       >

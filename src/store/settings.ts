@@ -142,6 +142,10 @@ const defaultSettings: Settings & {
     lowEnergyStart: 15, // 3 PM
     lowEnergyEnd: 20, // 8 PM
     groupByProject: false,
+    taskBlocksFeedId: null,
+    blockTypeMap: "[]",
+    noEligibleBlockPolicy: "schedule_nothing",
+    skipReflowBlockType: "light",
   },
   system: {
     googleClientId: undefined,
