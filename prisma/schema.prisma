@@ -86,6 +86,7 @@ model User {
   taskProviders        TaskProvider[]
   TaskChange           TaskChange[]
   PasswordReset        PasswordReset[]
+  personalCommitments  PersonalCommitment[]
 }
 
 model Workspace {
@@ -391,6 +392,47 @@ model AutoScheduleSettings {
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+}
+
+/// A recurring personal-value commitment (workout, eat, golf 2x/week). The
+/// materializer writes protected emoji block events onto the user's Task
+/// Blocks calendar so Phase A treats them as hard-protected time.
+model PersonalCommitment {
+  id          String  @id @default(cuid())
+  userId      String
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label       String
+  emoji       String // must match a protected BlockTypeRule emoji
+  durationMin Int
+  rrule       String // RFC5545, e.g. FREQ=WEEKLY;BYDAY=TU,TH
+  preferredHour Int? // 0-23 local; null = materializer picks a free slot
+  timesPerWeek  Int? // soft target for "Nx/week"
+  active        Boolean  @default(true)
+  lastMaterializedThrough DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events CommitmentEvent[]
+
+  @@index([userId])
+  @@index([active])
+}
+
+/// One materialized occurrence of a PersonalCommitment.
+model CommitmentEvent {
+  id            String             @id @default(cuid())
+  commitmentId  String
+  commitment    PersonalCommitment @relation(fields: [commitmentId], references: [id], onDelete: Cascade)
+  scheduledDate DateTime // UTC-midnight local-day key
+  start         DateTime
+  end           DateTime
+  googleEventId String? // event ID on the Task Blocks calendar
+  status        String   @default("planned") // planned|materialized|cancelled|conflict
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([commitmentId, scheduledDate])
+  @@index([commitmentId])
 }
 
 model UserSettings {
