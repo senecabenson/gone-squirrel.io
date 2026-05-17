@@ -591,3 +591,111 @@ export async function syncSingleTaskToGoogle(
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Commitment Calendar primitives (Task Blocks feed)
+// ---------------------------------------------------------------------------
+
+export interface CommitmentCalendarContext {
+  client: GCalClient;
+  googleCalendarId: string;
+  feedId: string;
+  timeZone: string;
+}
+
+/**
+ * Resolve the GCal client + calendar id for the user's Task Blocks feed.
+ * Returns null if the user has no connected Google account, no taskBlocksFeedId
+ * configured, or the CalendarFeed row / url is missing.
+ */
+export async function getCommitmentCalendarContext(
+  userId: string
+): Promise<CommitmentCalendarContext | null> {
+  const accountId = await getPrimaryGoogleAccountId(userId);
+  if (!accountId) {
+    logger.info(
+      "Skipping GCal operation: no connected Google account",
+      { userId },
+      LOG_SOURCE
+    );
+    return null;
+  }
+
+  const settings = await prisma.autoScheduleSettings.findUnique({
+    where: { userId },
+  });
+  const taskBlocksFeedId = settings?.taskBlocksFeedId ?? null;
+  if (!taskBlocksFeedId) return null;
+
+  const feed = await prisma.calendarFeed.findUnique({
+    where: { id: taskBlocksFeedId },
+  });
+  if (!feed || feed.url == null) return null;
+
+  const timeZone = await getUserTimeZone(userId);
+  const client = await getGoogleCalendarClient(accountId, userId);
+
+  return {
+    client,
+    googleCalendarId: feed.url,
+    feedId: taskBlocksFeedId,
+    timeZone,
+  };
+}
+
+/**
+ * Insert a single GCal event into the commitment calendar.
+ * Tags the event with a private extended property `gsCommitment = args.tag`
+ * so future syncs can identify it.
+ * Returns the created event id, or null if GCal returned no id (logs warn).
+ */
+export async function insertCommitmentGoogleEvent(
+  client: GCalClient,
+  calendarId: string,
+  args: {
+    summary: string;
+    start: { dateTime: string; timeZone: string };
+    end: { dateTime: string; timeZone: string };
+    description?: string;
+    tag: string;
+  }
+): Promise<string | null> {
+  const created = await client.events.insert({
+    calendarId,
+    requestBody: {
+      summary: args.summary,
+      description: args.description ?? undefined,
+      start: args.start,
+      end: args.end,
+      extendedProperties: { private: { gsCommitment: args.tag } },
+    },
+  });
+  const eventId = created.data.id ?? null;
+  if (!eventId) {
+    logger.warn(
+      "Google insert returned no event id",
+      { calendarId, tag: args.tag },
+      LOG_SOURCE
+    );
+    return null;
+  }
+  return eventId;
+}
+
+/**
+ * Delete a GCal event from the commitment calendar.
+ * Swallows 404/410 (idempotent); re-throws all other errors.
+ */
+export async function deleteCommitmentGoogleEvent(
+  client: GCalClient,
+  calendarId: string,
+  eventId: string
+): Promise<void> {
+  try {
+    await client.events.delete({ calendarId, eventId });
+  } catch (err: unknown) {
+    const status = (err as { code?: number }).code;
+    if (status === 404 || status === 410) return;
+    throw err;
+  }
+}
