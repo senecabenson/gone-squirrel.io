@@ -142,6 +142,11 @@ export function PersonalCommitments() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<CommitmentForm>(EMPTY_FORM);
 
+  // Per-occurrence adjustment state
+  const [busyOccId, setBusyOccId] = useState<string | null>(null);
+  const [moveOccId, setMoveOccId] = useState<string | null>(null);
+  const [moveValue, setMoveValue] = useState("");
+
   // Parse protected block rules from settings
   const allRules = parseBlockTypeMap(autoSchedule.blockTypeMap ?? "[]");
   const protectedRules = allRules.filter((r) => r.eligibility === "protected");
@@ -294,6 +299,92 @@ export function PersonalCommitments() {
     }
   };
 
+  // ── Per-occurrence skip / move ──────────────────────────────────────────────
+
+  const formatWhen = (iso: string) => {
+    const d = new Date(iso);
+    return `${d.toLocaleDateString(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    })} ${d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+  };
+
+  const handleSkip = async (commitmentId: string, occId: string) => {
+    setBusyOccId(occId);
+    try {
+      const res = await fetch(`/api/commitments/${commitmentId}/skip`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ occurrenceId: occId }),
+      });
+      const data = (await res.json()) as {
+        makeup?: { status: string; start?: string };
+        error?: string;
+      };
+      if (!res.ok) {
+        toast.error(data.error ?? "Skip failed");
+        return;
+      }
+      if (data.makeup?.status === "materialized" && data.makeup.start) {
+        toast.success(`Skipped — moved to ${formatWhen(data.makeup.start)}`);
+      } else {
+        toast.error(
+          "Couldn't refit this week — use Move to pick a time"
+        );
+      }
+      await refresh();
+    } catch {
+      toast.error("Skip failed");
+    } finally {
+      setBusyOccId(null);
+    }
+  };
+
+  const handleMove = async (commitmentId: string, occId: string) => {
+    if (!moveValue) {
+      toast.error("Pick a new time first");
+      return;
+    }
+    const parsed = new Date(moveValue);
+    if (Number.isNaN(parsed.getTime())) {
+      toast.error("Invalid time");
+      return;
+    }
+    setBusyOccId(occId);
+    try {
+      const res = await fetch(`/api/commitments/${commitmentId}/move`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          occurrenceId: occId,
+          newStart: parsed.toISOString(),
+        }),
+      });
+      const data = (await res.json()) as { start?: string; error?: string };
+      if (res.status === 409) {
+        toast.error(
+          "That time collides with a protected block — pick another"
+        );
+        return;
+      }
+      if (!res.ok) {
+        toast.error(data.error ?? "Move failed");
+        return;
+      }
+      toast.success(
+        data.start ? `Moved to ${formatWhen(data.start)}` : "Moved"
+      );
+      setMoveOccId(null);
+      setMoveValue("");
+      await refresh();
+    } catch {
+      toast.error("Move failed");
+    } finally {
+      setBusyOccId(null);
+    }
+  };
+
   // ── Form field helpers ──────────────────────────────────────────────────────
 
   const toggleDay = (day: Weekday) => {
@@ -398,22 +489,91 @@ export function PersonalCommitments() {
                 </div>
               </div>
 
-              {/* Next occurrences */}
+              {/* Next occurrences — per-occurrence skip / move */}
               {c.events.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {c.events.map((ev) => (
-                    <span
-                      key={ev.id}
-                      className={
-                        ev.status === "conflict"
-                          ? "rounded-md bg-red-50 px-2 py-1 text-[11px] font-medium text-red-600 dark:bg-red-950 dark:text-red-400"
-                          : "rounded-md bg-surface-sunken px-2 py-1 text-[11px] text-ink-soft"
-                      }
-                    >
-                      {ev.status === "conflict" && "Couldn't fit · "}
-                      {formatEventDate(ev.start)}
-                    </span>
-                  ))}
+                <div className="flex flex-col gap-2">
+                  {c.events
+                    .filter((ev) => ev.status !== "cancelled")
+                    .map((ev) => {
+                      const isConflict = ev.status === "conflict";
+                      const isFuture =
+                        new Date(ev.start).getTime() > Date.now();
+                      const occBusy = busyOccId === ev.id;
+                      const moveOpen = moveOccId === ev.id;
+                      return (
+                        <div
+                          key={ev.id}
+                          className="flex flex-wrap items-center gap-2"
+                        >
+                          <span
+                            className={
+                              isConflict
+                                ? "rounded-md bg-red-50 px-2 py-1 text-[11px] font-medium text-red-600 dark:bg-red-950 dark:text-red-400"
+                                : "rounded-md bg-surface-sunken px-2 py-1 text-[11px] text-ink-soft"
+                            }
+                          >
+                            {isConflict && "Couldn't fit · "}
+                            {formatEventDate(ev.start)}
+                          </span>
+
+                          {!isConflict && isFuture && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={occBusy}
+                              onClick={() => void handleSkip(c.id, ev.id)}
+                            >
+                              {occBusy ? "…" : "Skip"}
+                            </Button>
+                          )}
+
+                          {isFuture && !moveOpen && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={occBusy}
+                              onClick={() => {
+                                setMoveOccId(ev.id);
+                                setMoveValue("");
+                              }}
+                            >
+                              Move
+                            </Button>
+                          )}
+
+                          {moveOpen && (
+                            <div className="flex flex-wrap items-center gap-2">
+                              <input
+                                type="datetime-local"
+                                value={moveValue}
+                                onChange={(e) =>
+                                  setMoveValue(e.target.value)
+                                }
+                                className="rounded-md border border-[hsl(var(--border-subtle))] bg-surface px-2 py-1 text-[11px] text-ink"
+                              />
+                              <Button
+                                size="sm"
+                                disabled={occBusy}
+                                onClick={() => void handleMove(c.id, ev.id)}
+                              >
+                                {occBusy ? "…" : "Confirm"}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={occBusy}
+                                onClick={() => {
+                                  setMoveOccId(null);
+                                  setMoveValue("");
+                                }}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                 </div>
               )}
 
@@ -433,6 +593,15 @@ export function PersonalCommitments() {
             </div>
           );
         })}
+
+        {!loading && commitments.length > 0 && (
+          <p className="text-[11px] text-ink-mute">
+            Skipping frees that time for work and auto-finds a make-up slot
+            the same week. Edit raw Task Blocks (🧠/🪶/protected) directly in
+            Google Calendar — the next schedule run picks them up
+            automatically.
+          </p>
+        )}
 
         {/* Add new form */}
         {editingId === "" && (
