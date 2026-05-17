@@ -184,6 +184,15 @@ export async function materialize(
         },
       });
 
+      // Phase C skip guard: an explicitly cancelled occurrence is a
+      // per-occurrence skip. NEVER resurrect it — the skip route triggers a
+      // recompute (this fn), and resurrecting here would silently undo the
+      // skip. It stays cancelled until the user un-skips (which clears or
+      // reactivates the row from the rrule).
+      if (existing && existing.status === "cancelled") {
+        continue;
+      }
+
       // Idempotency guard: an occurrence already materialized with a GCal
       // event is left fully untouched — no re-pick, no GCal insert, no new
       // mirror row. Its slot was already reserved in `busy` from the

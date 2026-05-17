@@ -294,7 +294,11 @@ import {
   insertCommitmentGoogleEvent,
   deleteCommitmentGoogleEvent,
 } from "@/services/google-task-sync";
-import { makeupOccurrence, isoWeekBounds } from "../CommitmentMaterializer";
+import {
+  makeupOccurrence,
+  isoWeekBounds,
+  materialize,
+} from "../CommitmentMaterializer";
 
 const stores = (prisma as unknown as { __stores: InMemoryStores }).__stores;
 
@@ -471,6 +475,56 @@ describe("makeupOccurrence", () => {
     expect(mockInsert).not.toHaveBeenCalled();
     expect(stores.commitmentEvent.size).toBe(0);
     expect(stores.calendarEvent.size).toBe(0);
+  });
+});
+
+describe("materialize — respects an explicit per-occurrence skip", () => {
+  // A cancelled CommitmentEvent is a Phase C skip. materialize MUST NOT
+  // resurrect it on the next recompute (the skip route triggers a recompute);
+  // otherwise skip is undone the moment it happens.
+  it("(7) does not resurrect a cancelled occurrence", async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-05-18T00:00:00Z")); // Monday
+    try {
+      mockCtx.mockResolvedValue(CTX);
+      stores.personalCommitment.set("c1", {
+        id: "c1",
+        userId: USER,
+        label: "Movement",
+        emoji: "💪🏽",
+        durationMin: 60,
+        rrule: "FREQ=DAILY",
+        preferredHour: null,
+        timesPerWeek: null,
+        active: true,
+        lastMaterializedThrough: null,
+      });
+      // Tue 2026-05-19 was explicitly skipped (cancelled).
+      const tueKey = new Date("2026-05-19T00:00:00Z");
+      stores.commitmentEvent.set("ce-skip", {
+        id: "ce-skip",
+        commitmentId: "c1",
+        scheduledDate: tueKey,
+        start: new Date("2026-05-19T16:00:00Z"),
+        end: new Date("2026-05-19T17:00:00Z"),
+        googleEventId: null,
+        status: "cancelled",
+      });
+
+      const res = await materialize(USER, 2); // Mon, Tue, Wed occurrences
+
+      // Mon + Wed materialize; Tue stays cancelled, never re-inserted.
+      expect(stores.commitmentEvent.get("ce-skip")!.status).toBe("cancelled");
+      expect(res.created).toBe(2);
+      const calForTue = [...stores.calendarEvent.values()].some(
+        (c) =>
+          c.start.getTime() >= new Date("2026-05-19T00:00:00Z").getTime() &&
+          c.start.getTime() < new Date("2026-05-20T00:00:00Z").getTime()
+      );
+      expect(calForTue).toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
 
