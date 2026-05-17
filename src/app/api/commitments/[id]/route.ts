@@ -41,20 +41,80 @@ export async function PATCH(
       return NextResponse.json({ error: "Commitment not found" }, { status: 404 });
     }
 
-    const body = await request.json();
-    const updates = body as Record<string, unknown>;
+    const body = (await request.json()) as Record<string, unknown>;
+
+    // Allowlist: only these fields may be patched. Anything else (userId,
+    // relation writes, id, …) is ignored — no mass-assignment. Mirrors the
+    // explicit-destructure validation in POST /api/commitments.
+    const {
+      label,
+      emoji,
+      durationMin,
+      rrule,
+      preferredHour,
+      timesPerWeek,
+      active,
+    } = body;
+
+    const data: Record<string, unknown> = {};
+    if (label !== undefined) {
+      if (typeof label !== "string" || !label.trim()) {
+        return NextResponse.json(
+          { error: "label must be a non-empty string" },
+          { status: 400 }
+        );
+      }
+      data.label = label.trim();
+    }
+    if (durationMin !== undefined) {
+      if (typeof durationMin !== "number" || durationMin <= 0) {
+        return NextResponse.json(
+          { error: "durationMin must be a positive number" },
+          { status: 400 }
+        );
+      }
+      data.durationMin = durationMin;
+    }
+    if (rrule !== undefined) {
+      if (typeof rrule !== "string" || !rrule.trim()) {
+        return NextResponse.json(
+          { error: "rrule must be a non-empty string" },
+          { status: 400 }
+        );
+      }
+      data.rrule = rrule.trim();
+    }
+    if (preferredHour !== undefined) {
+      data.preferredHour =
+        typeof preferredHour === "number" ? preferredHour : null;
+    }
+    if (timesPerWeek !== undefined) {
+      data.timesPerWeek =
+        typeof timesPerWeek === "number" ? timesPerWeek : null;
+    }
+    if (active !== undefined) {
+      if (typeof active !== "boolean") {
+        return NextResponse.json(
+          { error: "active must be a boolean" },
+          { status: 400 }
+        );
+      }
+      data.active = active;
+    }
 
     // If the emoji is being changed, validate it is still protected.
-    if ("emoji" in updates) {
-      const newEmoji = updates.emoji;
-      if (typeof newEmoji !== "string" || !newEmoji.trim()) {
-        return NextResponse.json({ error: "emoji must be a non-empty string" }, { status: 400 });
+    if (emoji !== undefined) {
+      if (typeof emoji !== "string" || !emoji.trim()) {
+        return NextResponse.json(
+          { error: "emoji must be a non-empty string" },
+          { status: 400 }
+        );
       }
       const settings = await prisma.autoScheduleSettings.findUnique({
         where: { userId },
       });
       const rules = parseBlockTypeMap(settings?.blockTypeMap ?? "[]");
-      const rule = rules.find((r) => r.emoji === newEmoji);
+      const rule = rules.find((r) => r.emoji === emoji);
       if (!rule || rule.eligibility !== "protected") {
         return NextResponse.json(
           {
@@ -64,9 +124,17 @@ export async function PATCH(
           { status: 400 }
         );
       }
+      data.emoji = emoji.trim();
     }
 
-    const needsRematerialize = Object.keys(updates).some((k) =>
+    if (Object.keys(data).length === 0) {
+      return NextResponse.json(
+        { error: "no updatable fields provided" },
+        { status: 400 }
+      );
+    }
+
+    const needsRematerialize = Object.keys(data).some((k) =>
       REMATERIALIZE_FIELDS.has(k)
     );
 
@@ -76,7 +144,7 @@ export async function PATCH(
 
     const updated = await prisma.personalCommitment.update({
       where: { id, userId },
-      data: updates,
+      data,
     });
 
     let materializeResult = null;

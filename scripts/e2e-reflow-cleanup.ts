@@ -21,17 +21,28 @@ async function main() {
   if (!userId) throw new Error("usage: e2e-reflow-cleanup.ts <userId>");
 
   const ctx = await getCommitmentCalendarContext(userId);
+  if (!ctx) {
+    // Without a resolved feed, every delete below would be UNSCOPED and would
+    // match gs:reflow:/gs:e2e-seed rows across ALL feeds and ALL users in the
+    // shared dev DB. Never run an unscoped delete — fail loudly instead.
+    console.error(
+      "e2e-reflow-cleanup: getCommitmentCalendarContext returned null — " +
+        "refusing to run an unscoped delete. Resolve the Task Blocks feed " +
+        "(taskBlocksFeedId / Google account) and retry."
+    );
+    process.exit(1);
+  }
 
-  // 1. gs:reflow temp blocks — real GCal + mirror.
+  // 1. gs:reflow temp blocks — real GCal + mirror (scoped to the feed).
   const reflowMirrors = await prisma.calendarEvent.findMany({
     where: {
-      ...(ctx ? { feedId: ctx.feedId } : {}),
+      feedId: ctx.feedId,
       description: { startsWith: "gs:reflow:" },
     },
   });
   let gcalDeleted = 0;
   for (const m of reflowMirrors) {
-    if (ctx && m.externalEventId) {
+    if (m.externalEventId) {
       await deleteCommitmentGoogleEvent(
         ctx.client,
         ctx.googleCalendarId,
@@ -45,7 +56,7 @@ async function main() {
   // 2. DB-only seeded eligible blocks (never written to Google).
   const seeded = await prisma.calendarEvent.deleteMany({
     where: {
-      ...(ctx ? { feedId: ctx.feedId } : {}),
+      feedId: ctx.feedId,
       description: "gs:e2e-seed",
     },
   });
