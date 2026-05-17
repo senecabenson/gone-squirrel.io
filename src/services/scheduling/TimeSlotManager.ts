@@ -20,6 +20,14 @@ import { useSettingsStore } from "@/store/settings";
 
 import { Conflict, TimeSlot } from "@/types/scheduling";
 
+import {
+  BlockCalendarService,
+  BlockTypeRule,
+  EVENING_CUTOFF_HOUR,
+  NoEligibleBlockPolicy,
+  parseBlockTypeMap,
+  selectSlotsWithPolicy,
+} from "./BlockCalendarService";
 import { CalendarService } from "./CalendarService";
 import { SlotScorer } from "./SlotScorer";
 
@@ -50,6 +58,8 @@ export interface TimeSlotManager {
 export class TimeSlotManagerImpl implements TimeSlotManager {
   private slotScorer: SlotScorer;
   private timeZone: string;
+  private blockService: BlockCalendarService;
+  private blockRules: BlockTypeRule[];
 
   constructor(
     private settings: AutoScheduleSettings,
@@ -57,6 +67,56 @@ export class TimeSlotManagerImpl implements TimeSlotManager {
   ) {
     this.timeZone = useSettingsStore.getState().user.timeZone;
     this.slotScorer = new SlotScorer(settings, new Map(), this.timeZone);
+    this.blockService = new BlockCalendarService(calendarService);
+    // `?? "[]"` guards a stale settings snapshot (SSR/persisted store
+    // predating the block fields); parseBlockTypeMap then falls back to
+    // DEFAULT_BLOCK_TYPE_MAP. No behavior change for valid input.
+    this.blockRules = parseBlockTypeMap(settings.blockTypeMap ?? "[]");
+  }
+
+  /**
+   * HARD availability filter (step 2.5). When a Task Blocks calendar is
+   * configured, a slot survives only if it is fully contained in an
+   * energy-matched eligible block and overlaps no protected block. Disabled
+   * (pass-through) when taskBlocksFeedId is null — fully backward compatible.
+   * The SOFT energy-window scoring in SlotScorer still ranks the survivors.
+   */
+  private async filterByBlocks(
+    slots: TimeSlot[],
+    task: Task,
+    userId: string
+  ): Promise<TimeSlot[]> {
+    const feedId = this.settings.taskBlocksFeedId;
+    if (!feedId || slots.length === 0) return slots;
+
+    let minStart = slots[0].start;
+    let maxEnd = slots[0].end;
+    for (const s of slots) {
+      if (s.start < minStart) minStart = s.start;
+      if (s.end > maxEnd) maxEnd = s.end;
+    }
+
+    const blocks = await this.blockService.getBlocks(
+      minStart,
+      maxEnd,
+      feedId,
+      this.blockRules,
+      this.timeZone,
+      EVENING_CUTOFF_HOUR,
+      task.userId || userId
+    );
+
+    const policy = (this.settings.noEligibleBlockPolicy ||
+      "schedule_nothing") as NoEligibleBlockPolicy;
+    const dayKey = (d: Date) =>
+      toZonedTime(d, this.timeZone).toISOString().slice(0, 10);
+    return selectSlotsWithPolicy(
+      slots,
+      blocks,
+      task.energyLevel,
+      policy,
+      dayKey
+    );
   }
 
   async updateScheduledTasks(userId: string): Promise<void> {
@@ -111,8 +171,11 @@ export class TimeSlotManagerImpl implements TimeSlotManager {
     // 2. Filter by work hours
     const workHourSlots = this.filterByWorkHours(potentialSlots);
 
+    // 2.5. HARD block-availability filter (Task Blocks calendar)
+    const blockSlots = await this.filterByBlocks(workHourSlots, task, userId);
+
     // 3. Check calendar conflicts
-    const availableSlots = await this.removeConflicts(workHourSlots, task);
+    const availableSlots = await this.removeConflicts(blockSlots, task);
 
     // 4. Apply buffer times
     const slotsWithBuffer = this.applyBufferTimes(availableSlots);
