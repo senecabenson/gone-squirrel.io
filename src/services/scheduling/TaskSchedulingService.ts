@@ -11,6 +11,7 @@ import {
 } from "@/types/task";
 
 import { syncScheduledTasksToGoogle } from "../google-task-sync";
+import { materialize } from "./CommitmentMaterializer";
 import { SchedulingService } from "./SchedulingService";
 
 const LOG_SOURCE = "TaskSchedulingService";
@@ -110,6 +111,24 @@ export async function scheduleAllTasksForUser(
 
     if (!userSettings) {
       throw new Error("Auto-schedule settings not found for user");
+    }
+
+    // Refresh commitment blocks before computing schedule so that protected
+    // slots are up-to-date. Failure must never block scheduling.
+    try {
+      await materialize(userId);
+    } catch (materializeError) {
+      logger.error(
+        "CommitmentMaterializer failed; scheduling will proceed without refresh",
+        {
+          userId,
+          error:
+            materializeError instanceof Error
+              ? materializeError.message
+              : String(materializeError),
+        },
+        LOG_SOURCE
+      );
     }
 
     // Get all tasks marked for auto-scheduling that are not locked
