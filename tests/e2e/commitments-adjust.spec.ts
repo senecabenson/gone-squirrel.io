@@ -401,11 +401,16 @@ test.describe("Phase C — skip/reflow/makeup/move live contract", () => {
     console.log("[afterAll] Zero residue confirmed.");
   });
 
+  // Wire (and snapshot) BEFORE the test body. If wiring lived inside the
+  // test and an earlier step threw, afterAll would have no snapshot and the
+  // real user would be left at the widened settings permanently.
+  test.beforeAll(() => {
+    settingsSnap = wireTaskBlocksFeed();
+  });
+
   test("skip frees the hour → low-energy work reflows INTO it; makeup same ISO week; move conflict typed", async ({
     playwright,
   }) => {
-    settingsSnap = wireTaskBlocksFeed();
-
     const req = await buildAuthedCtx(playwright);
     try {
       // Auth.

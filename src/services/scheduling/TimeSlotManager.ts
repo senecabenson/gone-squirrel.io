@@ -68,7 +68,10 @@ export class TimeSlotManagerImpl implements TimeSlotManager {
     this.timeZone = useSettingsStore.getState().user.timeZone;
     this.slotScorer = new SlotScorer(settings, new Map(), this.timeZone);
     this.blockService = new BlockCalendarService(calendarService);
-    this.blockRules = parseBlockTypeMap(settings.blockTypeMap);
+    // `?? "[]"` guards a stale settings snapshot (SSR/persisted store
+    // predating the block fields); parseBlockTypeMap then falls back to
+    // DEFAULT_BLOCK_TYPE_MAP. No behavior change for valid input.
+    this.blockRules = parseBlockTypeMap(settings.blockTypeMap ?? "[]");
   }
 
   /**
