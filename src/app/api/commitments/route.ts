@@ -3,7 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest } from "@/lib/auth/api-auth";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
-import { materialize } from "@/services/scheduling/CommitmentMaterializer";
+import {
+  materialize,
+  validateRrule,
+} from "@/services/scheduling/CommitmentMaterializer";
 import { parseBlockTypeMap } from "@/services/scheduling/BlockCalendarService";
 
 const LOG_SOURCE = "CommitmentsAPI";
@@ -75,6 +78,11 @@ export async function POST(request: NextRequest) {
         { error: "label, emoji, durationMin, and rrule are required" },
         { status: 400 }
       );
+    }
+
+    const rruleError = validateRrule(rrule.trim());
+    if (rruleError) {
+      return NextResponse.json({ error: rruleError }, { status: 400 });
     }
 
     // Validate that the emoji belongs to a PROTECTED block rule.

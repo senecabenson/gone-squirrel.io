@@ -39,6 +39,40 @@ export function expandOccurrences(
   return rule.between(from, to, true);
 }
 
+/** Max days any single materialize/horizon request may span (DoS backstop). */
+export const MAX_HORIZON_DAYS = 90;
+
+const ALLOWED_FREQ = new Set<number>([
+  RRule.DAILY,
+  RRule.WEEKLY,
+  RRule.MONTHLY,
+]);
+
+/**
+ * Validate a user-supplied RFC5545 RRULE before it is persisted/expanded.
+ * Returns an error message, or null if acceptable. Bounds the expansion so a
+ * crafted rule (`FREQ=SECONDLY`, huge `COUNT`, far `UNTIL`) can't fan out into
+ * thousands of GCal calls / a multi-MB response.
+ */
+export function validateRrule(rrule: string): string | null {
+  let opts: { freq?: number; count?: number | null; interval?: number };
+  try {
+    opts = RRule.parseString(rrule) as typeof opts;
+  } catch {
+    return "Invalid recurrence rule";
+  }
+  if (opts.freq == null || !ALLOWED_FREQ.has(opts.freq)) {
+    return "Recurrence FREQ must be DAILY, WEEKLY, or MONTHLY";
+  }
+  if (opts.count != null && opts.count > 366) {
+    return "Recurrence COUNT must be 366 or fewer";
+  }
+  if (opts.interval != null && opts.interval > 52) {
+    return "Recurrence INTERVAL must be 52 or fewer";
+  }
+  return null;
+}
+
 function overlaps(a: Interval, b: Interval): boolean {
   return (
     a.start.getTime() < b.end.getTime() && b.start.getTime() < a.end.getTime()
@@ -130,8 +164,16 @@ export async function materialize(
   });
   if (commitments.length === 0) return result;
 
+  // Backstop clamp — never expand past MAX_HORIZON_DAYS even if a caller
+  // (route, internal) passes an absurd value.
+  const clampedHorizon = Math.min(
+    Math.max(1, Math.floor(horizonDays)),
+    MAX_HORIZON_DAYS
+  );
   const from = utcMidnight(new Date());
-  const to = new Date(from.getTime() + horizonDays * 24 * 60 * 60 * 1000);
+  const to = new Date(
+    from.getTime() + clampedHorizon * 24 * 60 * 60 * 1000
+  );
 
   const commitmentIds = commitments.map((c) => c.id);
 
@@ -170,7 +212,11 @@ export async function materialize(
   }
 
   for (const c of commitments) {
-    const occurrences = expandOccurrences(c.rrule, from, from, to);
+    // Anchor recurrence phase to when the commitment was created — NOT the
+    // rolling `from` (today). A rolling dtstart re-derives the phase every
+    // run, flipping every-other-week (INTERVAL>1) rules and dropping/adding
+    // phantom occurrences across runs.
+    const occurrences = expandOccurrences(c.rrule, c.createdAt, from, to);
 
     for (const occ of occurrences) {
       const scheduledDate = utcMidnight(occ);

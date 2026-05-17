@@ -13,10 +13,12 @@ jest.mock("@/lib/prisma", () => ({
     autoScheduleSettings: { findUnique: jest.fn() },
   },
 }));
-jest.mock("@/services/scheduling/CommitmentMaterializer", () => ({
-  materialize: jest.fn(),
-  revoke: jest.fn(),
-}));
+jest.mock("@/services/scheduling/CommitmentMaterializer", () => {
+  const actual = jest.requireActual(
+    "@/services/scheduling/CommitmentMaterializer"
+  );
+  return { ...actual, materialize: jest.fn(), revoke: jest.fn() };
+});
 
 import type { NextRequest } from "next/server";
 import { authenticateRequest } from "@/lib/auth/api-auth";
@@ -103,6 +105,12 @@ it("(5) 404 when commitment not owned", async () => {
   mFind.mockResolvedValue(null);
   const res = await PATCH({ label: "x" });
   expect(res.status).toBe(404);
+  expect(mUpd).not.toHaveBeenCalled();
+});
+
+it("(6) rejects an out-of-policy rrule (400, no update)", async () => {
+  const res = await PATCH({ rrule: "FREQ=SECONDLY" });
+  expect(res.status).toBe(400);
   expect(mUpd).not.toHaveBeenCalled();
 });
 /* eslint-enable @typescript-eslint/no-explicit-any */

@@ -19,6 +19,7 @@ interface FakePersonalCommitment {
   timesPerWeek: number | null;
   active: boolean;
   lastMaterializedThrough: Date | null;
+  createdAt: Date;
 }
 
 interface FakeCommitmentEvent {
@@ -284,7 +285,11 @@ import {
   insertCommitmentGoogleEvent,
   deleteCommitmentGoogleEvent,
 } from "@/services/google-task-sync";
-import { materialize, revoke } from "../CommitmentMaterializer";
+import {
+  materialize,
+  revoke,
+  validateRrule,
+} from "../CommitmentMaterializer";
 import {
   matchBlockRule,
   DEFAULT_BLOCK_TYPE_MAP,
@@ -338,6 +343,7 @@ function seedCommitment(over: Partial<FakePersonalCommitment> = {}) {
     timesPerWeek: null,
     active: true,
     lastMaterializedThrough: null,
+    createdAt: new Date("2026-05-04T00:00:00Z"),
     ...over,
   };
   stores.personalCommitment.set(id, c);
@@ -459,6 +465,29 @@ describe("materialize", () => {
     expect(mockInsert).not.toHaveBeenCalled();
   });
 
+  it("(R3a) biweekly phase is anchored to createdAt, not the rolling 'today'", async () => {
+    mockCtx.mockResolvedValue(CTX);
+    // createdAt = Mon 2026-05-04 → INTERVAL=2 MO series: 05-04, 05-18,
+    // 06-01, 06-15 …
+    seedCommitment({
+      rrule: "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO",
+      preferredHour: 10,
+      createdAt: new Date("2026-05-04T00:00:00Z"),
+    });
+    // Run on an OFF-phase Monday (05-25). Rolling dtstart=from would yield
+    // {05-25, 06-08}; createdAt-anchored yields {06-01} only.
+    jest.setSystemTime(new Date("2026-05-25T00:00:00Z"));
+
+    await materialize(USER, 14);
+
+    const days = [...stores.commitmentEvent.values()].map((e) =>
+      e.scheduledDate.toISOString().slice(0, 10)
+    );
+    expect(days).toContain("2026-06-01");
+    expect(days).not.toContain("2026-05-25");
+    expect(days).not.toContain("2026-06-08");
+  });
+
   it("(7) Phase A contract: materialized title classifies protected", async () => {
     mockCtx.mockResolvedValue(CTX);
     seedCommitment(); // 💪🏽 Movement
@@ -496,5 +525,32 @@ describe("revoke", () => {
     const deletesAfterFirst = mockDelete.mock.calls.length;
     await expect(revoke("c1")).resolves.toBeUndefined();
     expect(mockDelete.mock.calls.length).toBe(deletesAfterFirst);
+  });
+});
+
+describe("R3b — horizon clamp + validateRrule", () => {
+  it("clamps an absurd horizonDays to <= 90 days", async () => {
+    mockCtx.mockResolvedValue(CTX);
+    seedCommitment(); // weekly TU/TH
+
+    await materialize(USER, 36500);
+
+    const c = stores.personalCommitment.get("c1")!;
+    const from = new Date(MONDAY);
+    from.setUTCHours(0, 0, 0, 0);
+    const maxTo = from.getTime() + 91 * 24 * 60 * 60 * 1000;
+    expect(c.lastMaterializedThrough).toBeTruthy();
+    expect(c.lastMaterializedThrough!.getTime()).toBeLessThanOrEqual(maxTo);
+  });
+
+  it("validateRrule: accepts DAILY/WEEKLY/MONTHLY, rejects the rest", () => {
+    expect(validateRrule("FREQ=WEEKLY;BYDAY=MO,WE")).toBeNull();
+    expect(validateRrule("FREQ=DAILY")).toBeNull();
+    expect(validateRrule("FREQ=MONTHLY;BYMONTHDAY=1")).toBeNull();
+    expect(validateRrule("FREQ=SECONDLY")).not.toBeNull();
+    expect(validateRrule("FREQ=HOURLY")).not.toBeNull();
+    expect(validateRrule("FREQ=WEEKLY;COUNT=99999")).not.toBeNull();
+    expect(validateRrule("FREQ=WEEKLY;INTERVAL=99")).not.toBeNull();
+    expect(validateRrule("not an rrule at all")).not.toBeNull();
   });
 });

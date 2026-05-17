@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import {
   materialize,
   revoke,
+  validateRrule,
 } from "@/services/scheduling/CommitmentMaterializer";
 import { parseBlockTypeMap } from "@/services/scheduling/BlockCalendarService";
 
@@ -81,6 +82,10 @@ export async function PATCH(
           { error: "rrule must be a non-empty string" },
           { status: 400 }
         );
+      }
+      const rruleError = validateRrule(rrule.trim());
+      if (rruleError) {
+        return NextResponse.json({ error: rruleError }, { status: 400 });
       }
       data.rrule = rrule.trim();
     }

@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { authenticateRequest } from "@/lib/auth/api-auth";
 import { logger } from "@/lib/logger";
-import { materialize } from "@/services/scheduling/CommitmentMaterializer";
+import {
+  materialize,
+  MAX_HORIZON_DAYS,
+} from "@/services/scheduling/CommitmentMaterializer";
 
 const LOG_SOURCE = "CommitmentsMaterializeAPI";
 
@@ -18,7 +21,10 @@ export async function POST(request: NextRequest) {
     try {
       const body = await request.json();
       if (typeof body?.horizonDays === "number" && body.horizonDays > 0) {
-        horizonDays = body.horizonDays;
+        horizonDays = Math.min(
+          Math.floor(body.horizonDays),
+          MAX_HORIZON_DAYS
+        );
       }
     } catch {
       // Empty or non-JSON body is fine — horizonDays stays undefined.
