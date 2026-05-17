@@ -441,6 +441,25 @@ describe("moveOccurrence", () => {
     expect(row.status).toBe("materialized");
     expect(row.googleEventId).toBe("gev-new");
     expect(res.moved).toBe(true);
+    // DB↔GCal consistency: the event written to Google matches the
+    // persisted row exactly (not just "insert was called").
+    const payload = mockInsert.mock.calls[0][2];
+    expect(payload.start.dateTime).toBe(row.start.toISOString());
+    expect(payload.end.dateTime).toBe(row.end.toISOString());
+  });
+
+  it("(R4a) GCal delete crash mid-move → googleEventId nulled (recoverable)", async () => {
+    seedOccurrence();
+    mockDelete.mockRejectedValueOnce(new Error("GCal 503"));
+
+    await expect(
+      moveOccurrence("ce-1", new Date("2026-05-19T10:00:00Z"))
+    ).rejects.toThrow();
+
+    const row = stores.ce.get("ce-1")!;
+    // googleEventId cleared before the delete → materialize's idempotency
+    // guard will allow a future re-placement (not stuck forever).
+    expect(row.googleEventId).toBeNull();
   });
 
   it("(5) onto a protected block → CommitmentMoveConflictError, ZERO mutation", async () => {

@@ -302,16 +302,27 @@ export async function moveOccurrence(
 
   // ---- MUTATION (validation passed) ------------------------------------
 
-  let newEventId: string | null = ev.googleEventId;
+  const oldEventId = ev.googleEventId;
+  let newEventId: string | null = oldEventId;
   if (ctx) {
-    if (ev.googleEventId) {
+    if (oldEventId) {
+      // Null googleEventId BEFORE the GCal delete. If the process dies
+      // between delete and the post-insert tx, the row would otherwise keep
+      // a stale googleEventId + status "materialized" and materialize's
+      // idempotency guard (materialized && googleEventId) would skip it
+      // forever. With googleEventId null, that guard lets a later
+      // materialize re-place it — the occurrence is recoverable.
+      await prisma.commitmentEvent.update({
+        where: { id: ev.id },
+        data: { googleEventId: null },
+      });
       await deleteCommitmentGoogleEvent(
         ctx.client,
         ctx.googleCalendarId,
-        ev.googleEventId
+        oldEventId
       );
       await prisma.calendarEvent.deleteMany({
-        where: { feedId: ctx.feedId, externalEventId: ev.googleEventId },
+        where: { feedId: ctx.feedId, externalEventId: oldEventId },
       });
     }
     const summary = `${commitment.emoji} ${commitment.label}`;

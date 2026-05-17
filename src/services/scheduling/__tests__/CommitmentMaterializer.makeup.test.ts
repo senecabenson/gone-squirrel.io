@@ -385,6 +385,31 @@ describe("makeupOccurrence", () => {
     expect(cals[0].feedId).toBe(CTX.feedId);
   });
 
+  it("(R4b) GCal insert failure → conflict AND the row is released (not left planned)", async () => {
+    mockCtx.mockResolvedValue(CTX);
+    seedCommitment();
+    mockInsert.mockRejectedValueOnce(new Error("GCal 503"));
+
+    const res = await makeupOccurrence(
+      "c1",
+      WEEK,
+      new Date("2026-05-19T00:00:00Z")
+    );
+
+    expect(res.status).toBe("conflict");
+    const rows = [...stores.commitmentEvent.values()].filter(
+      (e) => e.commitmentId === "c1"
+    );
+    expect(rows).toHaveLength(1);
+    // Slot released — must NOT linger as "planned" (would block others).
+    expect(rows[0].status).toBe("conflict");
+    expect(
+      [...stores.calendarEvent.values()].some(
+        (c) => c.feedId === CTX.feedId && c.title === "💪🏽 Movement"
+      )
+    ).toBe(false);
+  });
+
   it("(2) no free slot all week → conflict, zero GCal inserts, nothing evicted", async () => {
     mockCtx.mockResolvedValue(CTX);
     seedCommitment();
@@ -592,5 +617,16 @@ describe("isoWeekBounds", () => {
     // Mon 03-02 00:00 EST (UTC-5) = 05:00Z; Mon 03-09 00:00 EDT (UTC-4) = 04:00Z
     expect(b.start.toISOString()).toBe("2026-03-02T05:00:00.000Z");
     expect(b.end.toISOString()).toBe("2026-03-09T04:00:00.000Z");
+  });
+
+  it("(R5b) correct across the Dec→Jan year / ISO-week rollover", () => {
+    // Wed 2026-12-30 → ISO week = Mon 2026-12-28 .. next Mon 2027-01-04.
+    const wed = new Date("2026-12-30T12:00:00Z");
+    const b = isoWeekBounds(wed, "UTC");
+    expect(b.start.toISOString()).toBe("2026-12-28T00:00:00.000Z");
+    expect(b.end.toISOString()).toBe("2027-01-04T00:00:00.000Z");
+    // Monday start, exactly 7 days, straddling the year boundary.
+    expect(b.start.getUTCDay()).toBe(1);
+    expect(b.end.getTime() - b.start.getTime()).toBe(7 * 86400000);
   });
 });

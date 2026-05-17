@@ -585,18 +585,28 @@ export async function makeupOccurrence(
       );
     } catch (err) {
       logger.warn(
-        "Makeup GCal insert threw; leaving planned for retry",
+        "Makeup GCal insert threw; reverting row to conflict",
         { commitmentId, commitmentEventId, error: String(err) },
         LOG_SOURCE
       );
+      // Release the slot: a left-behind "planned" row would otherwise enter
+      // every future busy-set and silently block other commitments.
+      await prisma.commitmentEvent.update({
+        where: { id: commitmentEventId },
+        data: { status: "conflict" },
+      });
       return { status: "conflict" };
     }
     if (!eventId) {
       logger.warn(
-        "Makeup GCal insert returned null; leaving planned for retry",
+        "Makeup GCal insert returned null; reverting row to conflict",
         { commitmentId, commitmentEventId },
         LOG_SOURCE
       );
+      await prisma.commitmentEvent.update({
+        where: { id: commitmentEventId },
+        data: { status: "conflict" },
+      });
       return { status: "conflict" };
     }
 
