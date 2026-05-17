@@ -385,6 +385,39 @@ describe("skipOccurrence", () => {
     expect(res.makeup.status).toBe("conflict");
     expect(stores.cal.get("other")).toBeTruthy(); // not evicted
   });
+
+  it("(R2a-i) already-cancelled occurrence → idempotent no-op (conflict makeup, no GCal, no makeup)", async () => {
+    seedOccurrence({ status: "cancelled" });
+
+    const res = await skipOccurrence("ce-1", { reflow: "work" });
+
+    expect(res.skipped).toBe(true);
+    expect(res.makeup.status).toBe("conflict");
+    expect(mockDelete).not.toHaveBeenCalled();
+    expect(mockInsert).not.toHaveBeenCalled();
+    expect(mockMakeup).not.toHaveBeenCalled();
+    expect(
+      [...stores.cal.values()].some((c) =>
+        c.description?.startsWith("gs:reflow:")
+      )
+    ).toBe(false);
+  });
+
+  it("(R2a-ii) double skip → delete/insert/makeup each called exactly once, one reflow row", async () => {
+    seedOccurrence();
+
+    await skipOccurrence("ce-1", { reflow: "work" });
+    await skipOccurrence("ce-1", { reflow: "work" });
+
+    expect(mockDelete).toHaveBeenCalledTimes(1);
+    expect(mockInsert).toHaveBeenCalledTimes(1);
+    expect(mockMakeup).toHaveBeenCalledTimes(1);
+    expect(
+      [...stores.cal.values()].filter((c) =>
+        c.description?.startsWith("gs:reflow:")
+      )
+    ).toHaveLength(1);
+  });
 });
 
 describe("moveOccurrence", () => {

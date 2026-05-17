@@ -466,6 +466,22 @@ export async function makeupOccurrence(
       .filter((e) => e.commitmentId === commitmentId)
       .map((e) => utcMidnight(e.scheduledDate).getTime())
   );
+
+  // Skip-respect guard (mirrors the cancelled guard in materialize): a day
+  // holding a CANCELLED occurrence of THIS commitment was explicitly skipped
+  // by the user. Never make-up onto it — the upsert would flip it
+  // cancelled→planned→materialized and silently resurrect the skip.
+  const cancelledForThis = await prisma.commitmentEvent.findMany({
+    where: {
+      commitmentId,
+      status: "cancelled",
+      scheduledDate: { gte: from, lt: to },
+    },
+  });
+  for (const e of cancelledForThis) {
+    occupiedDays.add(utcMidnight(e.scheduledDate).getTime());
+  }
+
   const excludeKey = utcMidnight(excludeDateKey).getTime();
   const DAY_MS = 24 * 60 * 60 * 1000;
 

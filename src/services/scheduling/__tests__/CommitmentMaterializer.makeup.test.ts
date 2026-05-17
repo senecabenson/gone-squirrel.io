@@ -148,6 +148,10 @@ jest.mock("@/lib/prisma", () => {
         ) {
           rows = rows.filter((r) => r.status !== where.status!.not);
         }
+        if (typeof (where?.status as unknown) === "string") {
+          const want = where.status as unknown as string;
+          rows = rows.filter((r) => r.status === want);
+        }
         if (where?.scheduledDate?.gte && where?.scheduledDate?.lt) {
           rows = rows.filter(
             (r) =>
@@ -458,6 +462,50 @@ describe("makeupOccurrence", () => {
     // The pre-existing materialized CE is untouched.
     expect(stores.commitmentEvent.get("ce-existing")!.status).toBe(
       "materialized"
+    );
+  });
+
+  it("(R2b) skips a day holding a CANCELLED CE for this commitment (no resurrect)", async () => {
+    mockCtx.mockResolvedValue(CTX);
+    seedCommitment();
+    // Thu 05-21 was explicitly skipped earlier (a cancelled occurrence).
+    const thu = new Date("2026-05-21T00:00:00Z");
+    stores.commitmentEvent.set("ce-cancelled", {
+      id: "ce-cancelled",
+      commitmentId: "c1",
+      scheduledDate: thu,
+      start: new Date("2026-05-21T16:00:00Z"),
+      end: new Date("2026-05-21T17:00:00Z"),
+      googleEventId: null,
+      status: "cancelled",
+    });
+    // Block every other day's daytime so Thu is the only slot-free day —
+    // but it must be skipped because a cancelled CE sits there (un-skipping
+    // it via makeup would silently resurrect an explicit skip).
+    for (const d of [18, 19, 20, 22, 23, 24]) {
+      const ymd = `2026-05-${d}`;
+      stores.calendarEvent.set(`pre-${ymd}`, {
+        id: `pre-${ymd}`,
+        feedId: CTX.feedId,
+        title: "Blocker",
+        start: new Date(`${ymd}T06:00:00Z`),
+        end: new Date(`${ymd}T19:00:00Z`),
+        externalEventId: `ext-${ymd}`,
+        transparency: "opaque",
+      });
+    }
+
+    const res = await makeupOccurrence(
+      "c1",
+      WEEK,
+      new Date("2026-05-19T00:00:00Z")
+    );
+
+    expect(res.status).toBe("conflict");
+    expect(mockInsert).not.toHaveBeenCalled();
+    // The cancelled occurrence stays cancelled — not resurrected.
+    expect(stores.commitmentEvent.get("ce-cancelled")!.status).toBe(
+      "cancelled"
     );
   });
 

@@ -75,6 +75,17 @@ export async function skipOccurrence(
   });
   if (!ev) throw new Error(`CommitmentEvent ${commitmentEventId} not found`);
 
+  // Idempotency / terminal-state guard: a second skip (retry, double-tap)
+  // must NOT re-delete GCal, write a second gs:reflow temp block, or run a
+  // duplicate makeup. An already-cancelled occurrence is a no-op.
+  if (ev.status === "cancelled") {
+    return {
+      skipped: true,
+      reflow: opts.reflow,
+      makeup: { status: "conflict" },
+    };
+  }
+
   const commitment = await prisma.personalCommitment.findUnique({
     where: { id: ev.commitmentId },
   });

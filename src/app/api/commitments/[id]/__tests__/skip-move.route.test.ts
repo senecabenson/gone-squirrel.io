@@ -81,7 +81,11 @@ beforeEach(() => {
   jest.clearAllMocks();
   mAuth.mockResolvedValue({ userId: "u1" });
   mPC.mockResolvedValue({ id: "c1", userId: "u1" });
-  mCE.mockResolvedValue({ id: "occ1", commitmentId: "c1" });
+  mCE.mockResolvedValue({
+    id: "occ1",
+    commitmentId: "c1",
+    status: "materialized",
+  });
   mRecompute.mockResolvedValue([{ id: "task1" }]);
 });
 
@@ -145,6 +149,14 @@ describe("POST /api/commitments/[id]/skip", () => {
     const res = await skipPOST({});
     expect(res.status).toBe(400);
   });
+
+  it("(R2a) 409 already_skipped when occurrence already cancelled", async () => {
+    mCE.mockResolvedValue({ id: "occ1", commitmentId: "c1", status: "cancelled" });
+    const res = await skipPOST({ occurrenceId: "occ1" });
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe("already_skipped");
+    expect(mSkip).not.toHaveBeenCalled();
+  });
 });
 
 describe("POST /api/commitments/[id]/move", () => {
@@ -183,6 +195,17 @@ describe("POST /api/commitments/[id]/move", () => {
   it("(8) 400 when newStart is missing/invalid", async () => {
     const res = await movePOST({ occurrenceId: "occ1", newStart: "not-a-date" });
     expect(res.status).toBe(400);
+    expect(mMove).not.toHaveBeenCalled();
+  });
+
+  it("(R2a) 409 move_conflict when occurrence is not materialized", async () => {
+    mCE.mockResolvedValue({ id: "occ1", commitmentId: "c1", status: "cancelled" });
+    const res = await movePOST({
+      occurrenceId: "occ1",
+      newStart: "2026-05-19T10:00:00Z",
+    });
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe("move_conflict");
     expect(mMove).not.toHaveBeenCalled();
   });
 });

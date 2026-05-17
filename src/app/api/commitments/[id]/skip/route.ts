@@ -55,6 +55,12 @@ export async function POST(
         { status: 404 }
       );
     }
+    if (occ.status === "cancelled") {
+      return NextResponse.json(
+        { error: "Occurrence already skipped", code: "already_skipped" },
+        { status: 409 }
+      );
+    }
 
     const result = await skipOccurrence(occurrenceId, { reflow });
     const plan = await scheduleAllTasksForUser(userId);

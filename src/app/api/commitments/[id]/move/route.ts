@@ -66,6 +66,17 @@ export async function POST(
         { status: 404 }
       );
     }
+    // Only a materialized occurrence has a real GCal event/time to relocate.
+    // cancelled/planned/conflict are not movable — reject before mutation.
+    if (occ.status !== "materialized") {
+      return NextResponse.json(
+        {
+          error: `Cannot move a ${occ.status} occurrence`,
+          code: "move_conflict",
+        },
+        { status: 409 }
+      );
+    }
 
     let result;
     try {
