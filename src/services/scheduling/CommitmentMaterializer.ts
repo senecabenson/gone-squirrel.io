@@ -1,3 +1,5 @@
+import { addDays, startOfISOWeek } from "date-fns";
+import { fromZonedTime, toZonedTime } from "date-fns-tz";
 import { RRule } from "rrule";
 
 import { prisma } from "@/lib/prisma";
@@ -354,4 +356,200 @@ export async function revoke(commitmentId: string): Promise<void> {
       data: { status: "cancelled" },
     });
   }
+}
+
+// ---------------------------------------------------------------------------
+// Phase C — single-occurrence makeup (used by CommitmentAdjuster.skip)
+// ---------------------------------------------------------------------------
+
+/**
+ * UTC instants bounding the ISO week (Mon 00:00 local → next Mon 00:00 local,
+ * exclusive) that contains `date`, resolved in `timeZone`. Uses the same
+ * date-fns-tz authority as the rest of the scheduler — DST-correct (a week
+ * spanning a DST change is NOT 7×24h of UTC).
+ */
+export function isoWeekBounds(
+  date: Date,
+  timeZone: string
+): { start: Date; end: Date } {
+  const local = toZonedTime(date, timeZone);
+  const localMon = startOfISOWeek(local);
+  const localNextMon = addDays(localMon, 7);
+  return {
+    start: fromZonedTime(localMon, timeZone),
+    end: fromZonedTime(localNextMon, timeZone),
+  };
+}
+
+/**
+ * Find a makeup slot for ONE commitment within a single ISO week and
+ * materialize it (planned → GCal → mirror + materialized), reusing the exact
+ * busy-set / `pickSlot` / 3-step contract as `materialize`. Deterministic:
+ * first energy/daytime-valid slot wins, scanning days in week order. Never
+ * evicts existing calendar/commitment/task time and never re-makes-up a
+ * makeup (caller invokes this exactly once per skip).
+ *
+ * `excludeDateKey` = the skipped occurrence's day (never reused). Days that
+ * already hold an active CommitmentEvent for THIS commitment are skipped too
+ * (avoids the `@@unique([commitmentId,scheduledDate])` collision and
+ * double-booking the same habit on one day). No slot anywhere → "conflict".
+ */
+export async function makeupOccurrence(
+  commitmentId: string,
+  isoWeek: { start: Date; end: Date },
+  excludeDateKey: Date
+): Promise<
+  { status: "materialized"; start: Date; end: Date } | { status: "conflict" }
+> {
+  const commitment = await prisma.personalCommitment.findUnique({
+    where: { id: commitmentId },
+  });
+  if (!commitment) return { status: "conflict" };
+
+  const ctx = await getCommitmentCalendarContext(commitment.userId);
+  if (!ctx) return { status: "conflict" };
+
+  const from = isoWeek.start;
+  const to = isoWeek.end;
+
+  // Busy Interval[] — identical 3 sources as materialize, scoped to the week.
+  const busy: Interval[] = [];
+
+  const calEvents = await prisma.calendarEvent.findMany({
+    where: {
+      feedId: ctx.feedId,
+      AND: [{ start: { lt: to } }, { end: { gt: from } }],
+    },
+  });
+  for (const e of calEvents) busy.push({ start: e.start, end: e.end });
+
+  const userCommitments = await prisma.personalCommitment.findMany({
+    where: { userId: commitment.userId, active: true },
+  });
+  const commitmentIds = userCommitments.map((c) => c.id);
+  if (!commitmentIds.includes(commitmentId)) commitmentIds.push(commitmentId);
+
+  const existingEvents = await prisma.commitmentEvent.findMany({
+    where: {
+      commitmentId: { in: commitmentIds },
+      status: { in: ["planned", "materialized"] },
+      scheduledDate: { gte: from, lt: to },
+    },
+  });
+  for (const e of existingEvents) busy.push({ start: e.start, end: e.end });
+
+  const userTasks = await prisma.task.findMany({
+    where: {
+      userId: commitment.userId,
+      scheduledStart: { not: null },
+      scheduledEnd: { not: null },
+      AND: [{ scheduledStart: { lt: to } }, { scheduledEnd: { gt: from } }],
+    },
+  });
+  for (const t of userTasks) {
+    if (t.scheduledStart && t.scheduledEnd) {
+      busy.push({ start: t.scheduledStart, end: t.scheduledEnd });
+    }
+  }
+
+  const occupiedDays = new Set<number>(
+    existingEvents
+      .filter((e) => e.commitmentId === commitmentId)
+      .map((e) => utcMidnight(e.scheduledDate).getTime())
+  );
+  const excludeKey = utcMidnight(excludeDateKey).getTime();
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  for (
+    let day = utcMidnight(from);
+    day.getTime() < to.getTime();
+    day = new Date(day.getTime() + DAY_MS)
+  ) {
+    const key = day.getTime();
+    if (key === excludeKey) continue;
+    if (occupiedDays.has(key)) continue;
+
+    const slot = pickSlot(
+      day,
+      commitment.durationMin,
+      commitment.preferredHour ?? null,
+      busy,
+      ctx.timeZone
+    );
+    if (!slot) continue;
+
+    const scheduledDate = day;
+
+    // (a) Reserve planned.
+    const ce = await prisma.commitmentEvent.upsert({
+      where: {
+        commitmentId_scheduledDate: { commitmentId, scheduledDate },
+      },
+      create: {
+        commitmentId,
+        scheduledDate,
+        start: slot.start,
+        end: slot.end,
+        status: "planned",
+      },
+      update: { start: slot.start, end: slot.end, status: "planned" },
+    });
+    const commitmentEventId = ce.id;
+    const summary = `${commitment.emoji} ${commitment.label}`;
+
+    // (b) GCal insert OUTSIDE the tx. Failure → conflict (planned row left
+    // for a future materialize retry; nothing evicted).
+    let eventId: string | null = null;
+    try {
+      eventId = await insertCommitmentGoogleEvent(
+        ctx.client,
+        ctx.googleCalendarId,
+        {
+          summary,
+          start: { dateTime: slot.start.toISOString(), timeZone: ctx.timeZone },
+          end: { dateTime: slot.end.toISOString(), timeZone: ctx.timeZone },
+          description: `gsCommitment:${commitmentEventId}`,
+          tag: `gsCommitment:${commitmentEventId}`,
+        }
+      );
+    } catch (err) {
+      logger.warn(
+        "Makeup GCal insert threw; leaving planned for retry",
+        { commitmentId, commitmentEventId, error: String(err) },
+        LOG_SOURCE
+      );
+      return { status: "conflict" };
+    }
+    if (!eventId) {
+      logger.warn(
+        "Makeup GCal insert returned null; leaving planned for retry",
+        { commitmentId, commitmentEventId },
+        LOG_SOURCE
+      );
+      return { status: "conflict" };
+    }
+
+    // (c) Mirror + promote in ONE transaction.
+    await prisma.$transaction(async (tx) => {
+      await tx.calendarEvent.create({
+        data: {
+          feedId: ctx.feedId,
+          title: summary,
+          description: `gsCommitment:${commitmentEventId}`,
+          start: slot.start,
+          end: slot.end,
+          externalEventId: eventId,
+          transparency: "opaque",
+        },
+      });
+      await tx.commitmentEvent.update({
+        where: { id: commitmentEventId },
+        data: { status: "materialized", googleEventId: eventId },
+      });
+    });
+
+    return { status: "materialized", start: slot.start, end: slot.end };
+  }
+
+  return { status: "conflict" };
 }
