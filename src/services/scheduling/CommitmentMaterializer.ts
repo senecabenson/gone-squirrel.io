@@ -1,4 +1,4 @@
-import { addDays, startOfISOWeek } from "date-fns";
+import { addDays, startOfDay, startOfISOWeek } from "date-fns";
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
 import { RRule } from "rrule";
 
@@ -149,6 +149,22 @@ function utcMidnight(d: Date): Date {
 }
 
 /**
+ * UTC instant of (local midnight of `now`'s local day in `timeZone`) +
+ * `horizonDays` LOCAL calendar days. Calendar-days, not horizonDays*24h:
+ * a span crossing a DST tail is off by ±1 occurrence under UTC-exact ms
+ * math (fall-back day = 25h, spring-forward = 23h). Same date-fns-tz
+ * authority as {@link isoWeekBounds}.
+ */
+export function horizonEnd(
+  now: Date,
+  horizonDays: number,
+  timeZone: string
+): Date {
+  const localStart = startOfDay(toZonedTime(now, timeZone));
+  return fromZonedTime(addDays(localStart, horizonDays), timeZone);
+}
+
+/**
  * Materialize all active PersonalCommitments for `userId` over the next
  * `horizonDays`. Idempotent: an occurrence already materialized at the same
  * slot is left untouched (no GCal insert, no new mirror row). Never evicts
@@ -180,10 +196,13 @@ export async function materialize(
     Math.max(1, Math.floor(horizonDays)),
     MAX_HORIZON_DAYS
   );
-  const from = utcMidnight(new Date());
-  const to = new Date(
-    from.getTime() + clampedHorizon * 24 * 60 * 60 * 1000
-  );
+  const now = new Date();
+  const from = utcMidnight(now);
+  // Horizon end = clampedHorizon CALENDAR days in the user's tz (not
+  // clampedHorizon*24h of UTC) — DST-correct, no ±1 occurrence at a DST
+  // tail. `from` stays UTC-midnight: per-occurrence keying is unchanged,
+  // only the horizon boundary is tz-aware.
+  const to = horizonEnd(now, clampedHorizon, ctx.timeZone);
 
   const commitmentIds = commitments.map((c) => c.id);
 
