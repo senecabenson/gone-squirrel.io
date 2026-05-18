@@ -22,6 +22,7 @@ import {
 import { useCalendarStore } from "@/store/calendar";
 import { useSettingsStore } from "@/store/settings";
 
+import { BlockTypeMapEditor } from "./BlockTypeMapEditor";
 import { SettingRow, SettingsSection } from "./SettingsSection";
 
 export function AutoScheduleSettings() {
@@ -143,7 +144,41 @@ export function AutoScheduleSettings() {
               </SelectContent>
             </Select>
           </div>
+          <div>
+            <Label className="text-sm">
+              When an occurrence is skipped, reflow into
+            </Label>
+            <Select
+              value={autoSchedule.skipReflowBlockType}
+              onValueChange={(value) =>
+                updateAutoScheduleSettings({
+                  skipReflowBlockType: value,
+                })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="light">Light Work blocks</SelectItem>
+                <SelectItem value="deep">Deep Work blocks</SelectItem>
+                <SelectItem value="free">Free time</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
+      </SettingRow>
+
+      <SettingRow
+        label="Block Types"
+        description="Define how each calendar block (matched by its leading emoji) is treated: high/low-energy work or protected time, and whether it only counts before the evening cutoff."
+      >
+        <BlockTypeMapEditor
+          value={autoSchedule.blockTypeMap}
+          onChange={(json) =>
+            updateAutoScheduleSettings({ blockTypeMap: json })
+          }
+        />
       </SettingRow>
 
       <SettingRow
