@@ -142,6 +142,10 @@ const defaultSettings: Settings & {
     lowEnergyStart: 15, // 3 PM
     lowEnergyEnd: 20, // 8 PM
     groupByProject: false,
+    taskBlocksFeedId: null,
+    blockTypeMap: "[]",
+    noEligibleBlockPolicy: "schedule_nothing",
+    skipReflowBlockType: "light",
   },
   system: {
     googleClientId: undefined,
@@ -494,7 +498,7 @@ export const useSettingsStore = create<SettingsStore>()(
             integrationSettings,
             dataSettings,
             autoScheduleSettings,
-            systemSettings,
+            isAdmin,
             accounts,
           ] = await Promise.all([
             fetch("/api/user-settings").then((res) => res.json()),
@@ -503,9 +507,20 @@ export const useSettingsStore = create<SettingsStore>()(
             fetch("/api/integration-settings").then((res) => res.json()),
             fetch("/api/data-settings").then((res) => res.json()),
             fetch("/api/auto-schedule-settings").then((res) => res.json()),
-            fetch("/api/system-settings").then((res) => res.json()),
+            // UAT F1: /api/system-settings is admin-only (requireAdmin). Fetch
+            // it ONLY for admins — a non-admin load otherwise fires a GET +
+            // (via updateSystemSettings) a PATCH, both 403, spraying console
+            // errors on every settings visit. check-admin is public.
+            fetch("/api/auth/check-admin")
+              .then((res) => res.json())
+              .then((j) => Boolean(j?.isAdmin))
+              .catch(() => false),
             fetch("/api/accounts").then((res) => res.json()),
           ]);
+
+          const systemSettings = isAdmin
+            ? await fetch("/api/system-settings").then((res) => res.json())
+            : null;
 
           // Set initialized flag
           set({ initialized: true, accounts });
@@ -582,19 +597,33 @@ export const useSettingsStore = create<SettingsStore>()(
             lowEnergyStart: autoScheduleSettings.lowEnergyStart,
             lowEnergyEnd: autoScheduleSettings.lowEnergyEnd,
             groupByProject: autoScheduleSettings.groupByProject,
+            // Scheduling-block fields: the save path (updateAutoScheduleSettings)
+            // PATCHes the full settings object, so these must be re-hydrated here
+            // too or persisted custom block config is dropped on every load.
+            taskBlocksFeedId: autoScheduleSettings.taskBlocksFeedId,
+            blockTypeMap: autoScheduleSettings.blockTypeMap,
+            noEligibleBlockPolicy: autoScheduleSettings.noEligibleBlockPolicy,
+            skipReflowBlockType: autoScheduleSettings.skipReflowBlockType,
           });
 
-          get().updateSystemSettings({
-            googleClientId: systemSettings.googleClientId,
-            googleClientSecret: systemSettings.googleClientSecret,
-            outlookClientId: systemSettings.outlookClientId,
-            outlookClientSecret: systemSettings.outlookClientSecret,
-            outlookTenantId: systemSettings.outlookTenantId,
-            logLevel: systemSettings.logLevel as "none" | "debug",
-            logRetention: systemSettings.logRetention,
-            logDestination: systemSettings.logDestination,
-            disableHomepage: systemSettings.disableHomepage,
-          });
+          // Only admins have system settings to hydrate. updateSystemSettings
+          // also PATCHes /api/system-settings (admin-only); calling it for a
+          // non-admin would 403. Non-admins keep the store defaults — these
+          // fields are admin-surface only; routing (disableHomepage) is
+          // enforced server-side by middleware regardless.
+          if (isAdmin && systemSettings) {
+            get().updateSystemSettings({
+              googleClientId: systemSettings.googleClientId,
+              googleClientSecret: systemSettings.googleClientSecret,
+              outlookClientId: systemSettings.outlookClientId,
+              outlookClientSecret: systemSettings.outlookClientSecret,
+              outlookTenantId: systemSettings.outlookTenantId,
+              logLevel: systemSettings.logLevel as "none" | "debug",
+              logRetention: systemSettings.logRetention,
+              logDestination: systemSettings.logDestination,
+              disableHomepage: systemSettings.disableHomepage,
+            });
+          }
         } catch (error) {
           logger.error(
             "Failed to initialize settings from database",

@@ -22,6 +22,7 @@ import {
 import { useCalendarStore } from "@/store/calendar";
 import { useSettingsStore } from "@/store/settings";
 
+import { BlockTypeMapEditor } from "./BlockTypeMapEditor";
 import { SettingRow, SettingsSection } from "./SettingsSection";
 
 export function AutoScheduleSettings() {
@@ -91,6 +92,93 @@ export function AutoScheduleSettings() {
             </div>
           )}
         </div>
+      </SettingRow>
+
+      <SettingRow
+        label="Task Blocks Calendar"
+        description="Pick the calendar that defines your day's blocks (🧠 Deep Work / 🪶 Light Work / protected family & health time). When set, work tasks are only scheduled inside daytime Deep/Light Work blocks matched to the task's energy level; every other block is protected."
+      >
+        <div className="space-y-3">
+          <Select
+            value={autoSchedule.taskBlocksFeedId ?? "none"}
+            onValueChange={(value) =>
+              updateAutoScheduleSettings({
+                taskBlocksFeedId: value === "none" ? null : value,
+              })
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Off — flat working hours" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Off — flat working hours</SelectItem>
+              {feeds.map((feed) => (
+                <SelectItem key={feed.id} value={feed.id}>
+                  {feed.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div>
+            <Label className="text-sm">
+              When a day has no matching work block
+            </Label>
+            <Select
+              value={autoSchedule.noEligibleBlockPolicy}
+              onValueChange={(value) =>
+                updateAutoScheduleSettings({
+                  noEligibleBlockPolicy: value,
+                })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="schedule_nothing">
+                  Schedule nothing (protect the day)
+                </SelectItem>
+                <SelectItem value="fallback_work_hours">
+                  Fall back to flat working hours
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-sm">
+              When an occurrence is skipped, reflow into
+            </Label>
+            <Select
+              value={autoSchedule.skipReflowBlockType}
+              onValueChange={(value) =>
+                updateAutoScheduleSettings({
+                  skipReflowBlockType: value,
+                })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="light">Light Work blocks</SelectItem>
+                <SelectItem value="deep">Deep Work blocks</SelectItem>
+                <SelectItem value="free">Free time</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </SettingRow>
+
+      <SettingRow
+        label="Block Types"
+        description="Define how each calendar block (matched by its leading emoji) is treated: high/low-energy work or protected time, and whether it only counts before the evening cutoff."
+      >
+        <BlockTypeMapEditor
+          value={autoSchedule.blockTypeMap}
+          onChange={(json) =>
+            updateAutoScheduleSettings({ blockTypeMap: json })
+          }
+        />
       </SettingRow>
 
       <SettingRow

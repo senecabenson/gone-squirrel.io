@@ -71,6 +71,11 @@ export interface AutoScheduleSettings {
   lowEnergyStart: number | null;
   lowEnergyEnd: number | null;
   groupByProject: boolean;
+  // Scheduling Blocks
+  taskBlocksFeedId: string | null;
+  blockTypeMap: string; // JSON BlockTypeRule[]
+  noEligibleBlockPolicy: string; // 'schedule_nothing' | 'fallback_work_hours'
+  skipReflowBlockType: string; // 'light' | 'deep' | 'free'
 }
 
 // Define a type for log retention periods

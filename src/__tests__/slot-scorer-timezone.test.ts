@@ -21,6 +21,10 @@ const makeSettings = (
   lowEnergyStart: 15,
   lowEnergyEnd: 17,
   groupByProject: false,
+  taskBlocksFeedId: null,
+  blockTypeMap: "[]",
+  noEligibleBlockPolicy: "schedule_nothing",
+  skipReflowBlockType: "light",
   createdAt: new Date(),
   updatedAt: new Date(),
   ...overrides,
@@ -131,5 +135,34 @@ describe("SlotScorer timezone awareness", () => {
 
     // Local hour = 9 → "morning" range [5,12) → should score 1.0
     expect(result.factors.timePreference).toBe(1.0);
+  });
+
+  /**
+   * Follow-up #17: fall-back DST coverage (the existing suite only had
+   * spring/forward-offset cases). On 2026-11-01 America/Los_Angeles falls
+   * back at 09:00Z (02:00 PDT → 01:00 PST), so local 01:00 occurs twice:
+   *   08:00Z = 01:00 PDT (UTC-7)   and   09:00Z = 01:00 PST (UTC-8)
+   * Both instants must resolve to local wall-clock hour 1 and score
+   * identically against the energy windows — characterization of the
+   * toZonedTime-based scorer across the duplicated hour.
+   */
+  it("resolves the duplicated fall-back hour to local wall-clock (2026-11-01 PDT→PST)", () => {
+    const settings = makeSettings({ lowEnergyStart: 1, lowEnergyEnd: 2 });
+    const task = makeTask({ energyLevel: "low" });
+    const scorer = new SlotScorer(settings, new Map(), "America/Los_Angeles");
+
+    const beforeFallBack = scorer.scoreSlot(
+      makeSlot(new Date("2026-11-01T08:00:00Z")),
+      task
+    );
+    const afterFallBack = scorer.scoreSlot(
+      makeSlot(new Date("2026-11-01T09:00:00Z")),
+      task
+    );
+
+    // Both = local 01:00 → low-energy window [1,2) → exact match, regardless
+    // of which side of the fall-back the UTC instant sits on.
+    expect(beforeFallBack.factors.energyLevelMatch).toBe(1.0);
+    expect(afterFallBack.factors.energyLevelMatch).toBe(1.0);
   });
 });
