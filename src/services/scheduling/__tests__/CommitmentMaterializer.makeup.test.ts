@@ -555,49 +555,55 @@ describe("materialize — respects an explicit per-occurrence skip", () => {
   // A cancelled CommitmentEvent is a Phase C skip. materialize MUST NOT
   // resurrect it on the next recompute (the skip route triggers a recompute);
   // otherwise skip is undone the moment it happens.
-  it("(7) does not resurrect a cancelled occurrence", async () => {
+  // Frozen clock is scoped to this describe via before/afterEach (#20:
+  // fake-timer hygiene — no inline setup + try/finally in the test body).
+  // This describe holds a single test, so the timer scope cannot leak to
+  // siblings.
+  beforeEach(() => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date("2026-05-18T00:00:00Z")); // Monday
-    try {
-      mockCtx.mockResolvedValue(CTX);
-      stores.personalCommitment.set("c1", {
-        id: "c1",
-        userId: USER,
-        label: "Movement",
-        emoji: "💪🏽",
-        durationMin: 60,
-        rrule: "FREQ=DAILY",
-        preferredHour: null,
-        timesPerWeek: null,
-        active: true,
-        lastMaterializedThrough: null,
-      });
-      // Tue 2026-05-19 was explicitly skipped (cancelled).
-      const tueKey = new Date("2026-05-19T00:00:00Z");
-      stores.commitmentEvent.set("ce-skip", {
-        id: "ce-skip",
-        commitmentId: "c1",
-        scheduledDate: tueKey,
-        start: new Date("2026-05-19T16:00:00Z"),
-        end: new Date("2026-05-19T17:00:00Z"),
-        googleEventId: null,
-        status: "cancelled",
-      });
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
 
-      const res = await materialize(USER, 2); // Mon, Tue, Wed occurrences
+  it("(7) does not resurrect a cancelled occurrence", async () => {
+    mockCtx.mockResolvedValue(CTX);
+    stores.personalCommitment.set("c1", {
+      id: "c1",
+      userId: USER,
+      label: "Movement",
+      emoji: "💪🏽",
+      durationMin: 60,
+      rrule: "FREQ=DAILY",
+      preferredHour: null,
+      timesPerWeek: null,
+      active: true,
+      lastMaterializedThrough: null,
+    });
+    // Tue 2026-05-19 was explicitly skipped (cancelled).
+    const tueKey = new Date("2026-05-19T00:00:00Z");
+    stores.commitmentEvent.set("ce-skip", {
+      id: "ce-skip",
+      commitmentId: "c1",
+      scheduledDate: tueKey,
+      start: new Date("2026-05-19T16:00:00Z"),
+      end: new Date("2026-05-19T17:00:00Z"),
+      googleEventId: null,
+      status: "cancelled",
+    });
 
-      // Mon + Wed materialize; Tue stays cancelled, never re-inserted.
-      expect(stores.commitmentEvent.get("ce-skip")!.status).toBe("cancelled");
-      expect(res.created).toBe(2);
-      const calForTue = [...stores.calendarEvent.values()].some(
-        (c) =>
-          c.start.getTime() >= new Date("2026-05-19T00:00:00Z").getTime() &&
-          c.start.getTime() < new Date("2026-05-20T00:00:00Z").getTime()
-      );
-      expect(calForTue).toBe(false);
-    } finally {
-      jest.useRealTimers();
-    }
+    const res = await materialize(USER, 2); // Mon, Tue, Wed occurrences
+
+    // Mon + Wed materialize; Tue stays cancelled, never re-inserted.
+    expect(stores.commitmentEvent.get("ce-skip")!.status).toBe("cancelled");
+    expect(res.created).toBe(2);
+    const calForTue = [...stores.calendarEvent.values()].some(
+      (c) =>
+        c.start.getTime() >= new Date("2026-05-19T00:00:00Z").getTime() &&
+        c.start.getTime() < new Date("2026-05-20T00:00:00Z").getTime()
+    );
+    expect(calForTue).toBe(false);
   });
 });
 
