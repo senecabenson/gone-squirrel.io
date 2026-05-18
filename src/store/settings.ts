@@ -586,6 +586,13 @@ export const useSettingsStore = create<SettingsStore>()(
             lowEnergyStart: autoScheduleSettings.lowEnergyStart,
             lowEnergyEnd: autoScheduleSettings.lowEnergyEnd,
             groupByProject: autoScheduleSettings.groupByProject,
+            // Scheduling-block fields: the save path (updateAutoScheduleSettings)
+            // PATCHes the full settings object, so these must be re-hydrated here
+            // too or persisted custom block config is dropped on every load.
+            taskBlocksFeedId: autoScheduleSettings.taskBlocksFeedId,
+            blockTypeMap: autoScheduleSettings.blockTypeMap,
+            noEligibleBlockPolicy: autoScheduleSettings.noEligibleBlockPolicy,
+            skipReflowBlockType: autoScheduleSettings.skipReflowBlockType,
           });
 
           get().updateSystemSettings({
