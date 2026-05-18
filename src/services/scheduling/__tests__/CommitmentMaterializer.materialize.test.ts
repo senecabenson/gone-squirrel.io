@@ -36,6 +36,7 @@ interface FakeCalendarEvent {
   id: string;
   feedId: string;
   title: string;
+  description?: string | null;
   start: Date;
   end: Date;
   externalEventId: string | null;
@@ -68,6 +69,7 @@ interface WhereCommitmentEvent {
 interface WhereCalendarEvent {
   feedId?: string;
   externalEventId?: string;
+  description?: { in?: string[] };
   AND?: Array<{ start?: { lt?: Date }; end?: { gt?: Date } }>;
 }
 
@@ -224,6 +226,12 @@ jest.mock("@/lib/prisma", () => {
           rows = rows.filter(
             (r) => r.externalEventId === where.externalEventId
           );
+        if (where?.description?.in)
+          rows = rows.filter(
+            (r) =>
+              r.description != null &&
+              where.description!.in!.includes(r.description)
+          );
         if (where?.AND) {
           const lt = where.AND.find((c) => c.start?.lt)?.start?.lt;
           const gt = where.AND.find((c) => c.end?.gt)?.end?.gt;
@@ -254,6 +262,11 @@ jest.mock("@/lib/prisma", () => {
           return { count };
         }
       ),
+      delete: jest.fn(async ({ where }: { where: { id: string } }) => {
+        const row = calendarEvent.get(where.id);
+        calendarEvent.delete(where.id);
+        return row ? { ...row } : null;
+      }),
     },
     task: {
       findMany: jest.fn(async () => [...tasks.values()].map((t) => ({ ...t }))),
@@ -525,6 +538,41 @@ describe("revoke", () => {
     const deletesAfterFirst = mockDelete.mock.calls.length;
     await expect(revoke("c1")).resolves.toBeUndefined();
     expect(mockDelete.mock.calls.length).toBe(deletesAfterFirst);
+  });
+
+  it("(UAT orphan) backstop: a mirror whose CommitmentEvent.googleEventId is null is STILL swept", async () => {
+    // Real UAT residue: a commitment's mirror CalendarEvent survived DELETE
+    // because revoke keyed only off CommitmentEvent.googleEventId. If a CE's
+    // googleEventId is null (move-recovery window / partial materialize /
+    // desync) but its tagged mirror (gsCommitment:<ceId>) still exists on the
+    // feed, the old revoke orphaned it. The backstop sweep must catch it.
+    mockCtx.mockResolvedValue(CTX);
+    seedCommitment();
+    await materialize(USER, 14);
+
+    const mats = [...stores.commitmentEvent.values()].filter(
+      (e) => e.status === "materialized"
+    );
+    expect(mats.length).toBeGreaterThan(0);
+
+    // Simulate the desync: null out one CE's googleEventId while its mirror
+    // (description = gsCommitment:<ceId>, externalEventId set) stays on feed.
+    const desynced = mats[0];
+    const orphanGid = desynced.googleEventId!;
+    stores.commitmentEvent.get(desynced.id)!.googleEventId = null;
+    const mirrorStillThere = [...stores.calendarEvent.values()].some(
+      (c) => c.externalEventId === orphanGid
+    );
+    expect(mirrorStillThere).toBe(true); // precondition: mirror exists
+
+    await revoke("c1");
+
+    // No mirror left anywhere — including the desynced one.
+    expect([...stores.calendarEvent.values()]).toHaveLength(0);
+    // Its real GCal event was deleted via the backstop (by externalEventId).
+    expect(
+      mockDelete.mock.calls.some((c) => c[2] === orphanGid)
+    ).toBe(true);
   });
 });
 

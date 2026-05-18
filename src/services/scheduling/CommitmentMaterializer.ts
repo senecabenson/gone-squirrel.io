@@ -14,6 +14,43 @@ import { EVENING_CUTOFF_HOUR } from "./BlockCalendarService";
 
 const LOG_SOURCE = "CommitmentMaterializer";
 
+/**
+ * True if a thrown GCal error is an OAuth/credential failure (expired or
+ * revoked refresh token, 401). These must NOT be swallowed at warn level:
+ * the user's commitment calendar silently stops materializing until they
+ * reconnect Google. Surface at error level with an actionable message so
+ * monitoring/operators see it (UAT: a mid-session invalid_grant degraded
+ * the whole feature with only a buried warn).
+ */
+function isGoogleAuthError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  const code = (err as { code?: number | string }).code;
+  return (
+    /invalid_grant|invalid_token|unauthorized|invalid credentials/i.test(msg) ||
+    code === 401 ||
+    code === "401"
+  );
+}
+
+/** Log a swallowed GCal failure — error+actionable for auth, warn otherwise. */
+function logGcalFailure(
+  context: string,
+  meta: Record<string, unknown>,
+  err: unknown
+): void {
+  if (isGoogleAuthError(err)) {
+    logger.error(
+      `Google auth invalid (${context}) — commitment calendar sync is ` +
+        `DEGRADED until the user reconnects their Google account. ` +
+        `Occurrences are left unmaterialized, not silently dropped.`,
+      { ...meta, error: String(err) },
+      LOG_SOURCE
+    );
+  } else {
+    logger.warn(context, { ...meta, error: String(err) }, LOG_SOURCE);
+  }
+}
+
 /** Earliest local hour a commitment may be auto-placed. */
 export const DAY_START_HOUR = 6;
 const STEP_MS = 15 * 60 * 1000;
@@ -355,10 +392,10 @@ export async function materialize(
           }
         );
       } catch (err) {
-        logger.warn(
+        logGcalFailure(
           "Commitment GCal insert threw; leaving planned for retry",
-          { commitmentId: c.id, commitmentEventId, error: String(err) },
-          LOG_SOURCE
+          { commitmentId: c.id, commitmentEventId },
+          err
         );
         result.skipped++;
         continue;
@@ -439,6 +476,37 @@ export async function revoke(commitmentId: string): Promise<void> {
       where: { id: ev.id },
       data: { status: "cancelled" },
     });
+  }
+
+  // Backstop sweep (UAT orphan): the loop above can only reach a mirror via a
+  // non-null CommitmentEvent.googleEventId. If a CE's googleEventId is null —
+  // the move-recovery window (moveOccurrence nulls it before the GCal delete),
+  // a partial materialize, or any desync — its tagged mirror is left behind
+  // on the real calendar forever. Every commitment mirror is tagged
+  // `gsCommitment:<commitmentEventId>` (materialize step c + moveOccurrence),
+  // so sweep the feed by tag for ALL of this commitment's events (including
+  // cancelled ones) and delete any survivor. Reflow temp blocks use a
+  // different prefix (`gs:reflow:`) and are intentionally untouched here.
+  if (ctx) {
+    const allEvents = await prisma.commitmentEvent.findMany({
+      where: { commitmentId },
+    });
+    const tags = allEvents.map((e) => `gsCommitment:${e.id}`);
+    if (tags.length > 0) {
+      const orphans = await prisma.calendarEvent.findMany({
+        where: { feedId: ctx.feedId, description: { in: tags } },
+      });
+      for (const m of orphans) {
+        if (m.externalEventId) {
+          await deleteCommitmentGoogleEvent(
+            ctx.client,
+            ctx.googleCalendarId,
+            m.externalEventId
+          );
+        }
+        await prisma.calendarEvent.delete({ where: { id: m.id } });
+      }
+    }
   }
 }
 
@@ -613,10 +681,10 @@ export async function makeupOccurrence(
         }
       );
     } catch (err) {
-      logger.warn(
+      logGcalFailure(
         "Makeup GCal insert threw; reverting row to conflict",
-        { commitmentId, commitmentEventId, error: String(err) },
-        LOG_SOURCE
+        { commitmentId, commitmentEventId },
+        err
       );
       // Release the slot: a left-behind "planned" row would otherwise enter
       // every future busy-set and silently block other commitments.
