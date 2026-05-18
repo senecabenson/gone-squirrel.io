@@ -629,3 +629,21 @@ in 4 days.
 - **Deferred (follow-up queue):** #8 `skipReflowBlockType`/`blockTypeMap` customization UI (defaults functional); #14 `pickSlot` tz (explicit v1); #17 slot-scorer fall-back DST test (pre-existing, non-Phase-C); #18 horizon DST ±1 (LOW v1); #20 fake-timers hygiene (not vacuous). #16 most flagged tests already assert store mutations (not vacuous) — only the move-payload one was strengthened.
 - **Next concrete task:** post-remediation live e2e must still be `1 passed / Zero residue` (regression gate). Then push remediation commits + open PR to `main` **when user asks** (not yet).
 
+## 2026-05-18 — Scheduling Blocks: deferred follow-up queue cleared (#8/#14/#17/#18/#20)
+
+- **Branch:** `feat/scheduling-blocks-followups` (off `feat/scheduling-blocks`, NOT pushed). Plan: `~/.claude/plans/deferred-follow-ups-from-the-logical-abelson.md`. Brainstorm → /agent-router → strict TDD, 1 commit/item, lint+tsc green every commit. Cleared the entire defer queue from the Phase C remediation block above.
+- **Ground-truth corrections vs the brief (verified before coding):**
+  - **#8 location:** `updateAutoScheduleSettings()` save path already PATCHes the **full** `newSettings` — nothing omitted on save. Real round-trip break was the **load** path: `initializeSettings()` re-hydrated only 12/16 fields, dropping the 4 block fields. Fixed there (user-confirmed).
+  - **#8 UI partial:** `AutoScheduleSettings.tsx` already rendered `taskBlocksFeedId` + `noEligibleBlockPolicy` Selects. Remaining work shrank to: add `skipReflowBlockType` Select + `blockTypeMap` editor.
+  - **#20:** Phase C block recorded it as "skip" (not vacuous). User chose to do it anyway — harmless declarative hygiene.
+- **Did (6 commits):**
+  - **`cca146c`** (#8 round-trip) — `initializeSettings()` now re-hydrates `taskBlocksFeedId/blockTypeMap/noEligibleBlockPolicy/skipReflowBlockType`. TDD: `src/__tests__/settings-roundtrip.test.ts` (mock fetch, red→green).
+  - **`d69774f`** (#8 UI) — `skipReflowBlockType` light|deep|free Select beside policy Select; full `blockTypeMap` editor (emoji/label/eligibility/daytimeOnly per row + add/remove/reset). jest env is `node`, **no RTL in repo** → mutation logic extracted to pure `src/lib/blockTypeMapEditor.ts` (TDD'd, 5 tests); `BlockTypeMapEditor.tsx` is thin glue (structural edits persist immediately, free-text on blur).
+  - **`f96d42b`** (#14) — `pickSlot` window + `preferredHour` are wall-clock in `timeZone` via `fromZonedTime` (same date-fns-tz authority as `isoWeekBounds`); dropped the `void _timeZone` v1 stub. TDD: `pickSlot-timezone.test.ts` (LA -7, Kolkata +5:30, spring-forward, UTC identity).
+  - **`1978f5c`** (#17) — slot-scorer fall-back DST case (2026-11-01 PDT→PST, duplicated 01:00) added to `slot-scorer-timezone.test.ts`. Characterization — GREEN, no bug (scorer already `toZonedTime`-based).
+  - **`bf55355`** (#18) — extracted `horizonEnd(now, horizonDays, tz)` = local-midnight + N **calendar days** in tz (DST-correct). `materialize` uses it; per-occurrence `utcMidnight` keying unchanged, `MAX_HORIZON_DAYS` clamp kept. TDD: `materialize-horizon-tz.test.ts` (UTC identity, Nov fall-back +1h, spring-forward −1h vs naive ms math).
+  - **`f45e3a9`** (#20) — test (7) fake timers moved to scoped `beforeEach/afterEach` (single-test describe, leak-proof); inline setup + try/finally removed. Behavior + assertion identical.
+- **Verified:** `tsc --noEmit` exit 0 every commit (husky). Final fresh run: full `src/services/scheduling` + `slot-scorer-timezone` + `settings-roundtrip` + `blockTypeMapEditor` = **16 suites / 105 tests, 0 fail, exit 0**. `next lint`: only pre-existing `<img>` warnings, 0 errors. (ServerLogger→db stack in test output is pre-existing console noise, not a failure.)
+- **No live e2e:** `pickSlot`/`horizonEnd` pure + unit-covered; only run a self-cleaning real-calendar pass if scheduler path needs end-to-end re-validation (user's call).
+- **Next concrete task:** push `feat/scheduling-blocks-followups` + the Phase C remediation commits, open PR to `main` — **when user asks** (not yet).
+
