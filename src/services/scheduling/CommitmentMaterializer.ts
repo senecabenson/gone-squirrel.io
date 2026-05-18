@@ -80,31 +80,41 @@ function overlaps(a: Interval, b: Interval): boolean {
 }
 
 /**
+ * UTC instant of wall-clock `hour:00` on the calendar date carried by the
+ * UTC-midnight day key `day`, resolved in `timeZone`. Same date-fns-tz
+ * authority as {@link isoWeekBounds} — DST-correct.
+ */
+function zonedHourOnDayKey(day: Date, hour: number, timeZone: string): Date {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const y = day.getUTCFullYear();
+  const m = pad(day.getUTCMonth() + 1);
+  const d = pad(day.getUTCDate());
+  // Interpret "<date>T<hour>:00:00" as wall-clock in timeZone → UTC instant.
+  return fromZonedTime(`${y}-${m}-${d}T${pad(hour)}:00:00`, timeZone);
+}
+
+/**
  * Choose a slot of `durationMin` on `day` (UTC-midnight local-day key).
  * Tries `preferredHour` first, then scans the daytime window
  * [DAY_START_HOUR, EVENING_CUTOFF_HOUR) for the first gap not overlapping
- * `busy`. Returns null if none fits. `timeZone` is accepted for parity with
- * the rest of the scheduler; arithmetic is on the day key (v1).
+ * `busy`. Returns null if none fits. The window and `preferredHour` are
+ * wall-clock hours in `timeZone` (not UTC), so non-UTC users get slots on
+ * the correct local hour and day.
  */
 export function pickSlot(
   day: Date,
   durationMin: number,
   preferredHour: number | null,
   busy: Interval[],
-  _timeZone: string
+  timeZone: string
 ): Interval | null {
-  void _timeZone; // reserved for tz-aware placement (v2); kept for API parity
   const durMs = durationMin * 60 * 1000;
-  const dayStart = new Date(day);
-  dayStart.setUTCHours(DAY_START_HOUR, 0, 0, 0);
-  const windowEnd = new Date(day);
-  windowEnd.setUTCHours(EVENING_CUTOFF_HOUR, 0, 0, 0);
+  const dayStart = zonedHourOnDayKey(day, DAY_START_HOUR, timeZone);
+  const windowEnd = zonedHourOnDayKey(day, EVENING_CUTOFF_HOUR, timeZone);
 
   const candidates: number[] = [];
   if (preferredHour != null) {
-    const pref = new Date(day);
-    pref.setUTCHours(preferredHour, 0, 0, 0);
-    candidates.push(pref.getTime());
+    candidates.push(zonedHourOnDayKey(day, preferredHour, timeZone).getTime());
   }
   for (let t = dayStart.getTime(); t < windowEnd.getTime(); t += STEP_MS) {
     candidates.push(t);
