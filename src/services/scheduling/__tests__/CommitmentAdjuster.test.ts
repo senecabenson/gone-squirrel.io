@@ -133,6 +133,16 @@ jest.mock("@/lib/prisma", () => {
         Object.assign(row, data);
         return { ...row };
       }),
+      updateMany: jest.fn(async ({ where, data }: any) => {
+        let count = 0;
+        for (const row of ce.values()) {
+          if (where?.id && row.id !== where.id) continue;
+          if (where?.status?.not && row.status === where.status.not) continue;
+          Object.assign(row, data);
+          count++;
+        }
+        return { count };
+      }),
     },
     calendarEvent: {
       findMany: jest.fn(async ({ where }: any) => {
@@ -418,6 +428,29 @@ describe("skipOccurrence", () => {
       )
     ).toHaveLength(1);
   });
+
+  it("(R2a-iii / UAT F5) CONCURRENT double skip → exactly ONE cancel, ONE makeup, ONE reflow", async () => {
+    // UAT F5: two skips racing on the same occurrence both passed the
+    // read-then-check guard (neither had written `cancelled` yet) and each
+    // ran a makeup → TWO make-up occurrences. The fix is an atomic
+    // conditional claim; only the winner proceeds to reflow + makeup.
+    seedOccurrence();
+
+    await Promise.all([
+      skipOccurrence("ce-1", { reflow: "work" }),
+      skipOccurrence("ce-1", { reflow: "work" }),
+    ]);
+
+    expect(stores.ce.get("ce-1")!.status).toBe("cancelled");
+    expect(mockDelete).toHaveBeenCalledTimes(1);
+    expect(mockInsert).toHaveBeenCalledTimes(1);
+    expect(mockMakeup).toHaveBeenCalledTimes(1);
+    expect(
+      [...stores.cal.values()].filter((c) =>
+        c.description?.startsWith("gs:reflow:")
+      )
+    ).toHaveLength(1);
+  });
 });
 
 describe("moveOccurrence", () => {
@@ -446,6 +479,39 @@ describe("moveOccurrence", () => {
     const payload = mockInsert.mock.calls[0][2];
     expect(payload.start.dateTime).toBe(row.start.toISOString());
     expect(payload.end.dateTime).toBe(row.end.toISOString());
+  });
+
+  it("(UAT F4) cross-day move leaves a cancelled tombstone at the old slot (materialize must not back-fill)", async () => {
+    seedOccurrence(); // scheduledDate = 2026-05-19T00:00:00Z
+    const newStart = new Date("2026-05-21T10:00:00Z"); // different ISO day
+
+    await moveOccurrence("ce-1", newStart);
+
+    // moved row relocated
+    const moved = stores.ce.get("ce-1")!;
+    expect(moved.start.getTime()).toBe(newStart.getTime());
+    expect(moved.scheduledDate.getTime()).toBe(
+      new Date("2026-05-21T00:00:00Z").getTime()
+    );
+
+    // a cancelled tombstone now occupies the VACATED day so the next
+    // materialize's cancelled-guard suppresses a phantom back-fill there.
+    const tombstone = [...stores.ce.values()].find(
+      (e) =>
+        e.commitmentId === "c1" &&
+        e.id !== "ce-1" &&
+        e.scheduledDate.getTime() ===
+          new Date("2026-05-19T00:00:00Z").getTime()
+    );
+    expect(tombstone).toBeTruthy();
+    expect(tombstone!.status).toBe("cancelled");
+  });
+
+  it("(UAT F4) same-day move does NOT create a tombstone", async () => {
+    seedOccurrence(); // 2026-05-19
+    await moveOccurrence("ce-1", new Date("2026-05-19T12:00:00Z"));
+    const rows = [...stores.ce.values()].filter((e) => e.commitmentId === "c1");
+    expect(rows).toHaveLength(1); // only the moved row, no tombstone
   });
 
   it("(R4a) GCal delete crash mid-move → googleEventId nulled (recoverable)", async () => {

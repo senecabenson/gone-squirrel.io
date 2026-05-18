@@ -86,6 +86,24 @@ export async function skipOccurrence(
     };
   }
 
+  // Concurrency guard (UAT F5): the read-then-check above is NOT atomic — two
+  // skips racing on the same occurrence both saw it non-cancelled and each ran
+  // a makeup, spawning duplicate make-up occurrences. Atomically CLAIM the
+  // skip with a single conditional write: only the request that actually
+  // flips status (claimed.count === 1) owns the GCal delete + reflow + makeup;
+  // a loser short-circuits to the same idempotent no-op as a repeat skip.
+  const claimed = await prisma.commitmentEvent.updateMany({
+    where: { id: commitmentEventId, status: { not: "cancelled" } },
+    data: { status: "cancelled" },
+  });
+  if (claimed.count === 0) {
+    return {
+      skipped: true,
+      reflow: opts.reflow,
+      makeup: { status: "conflict" },
+    };
+  }
+
   const commitment = await prisma.personalCommitment.findUnique({
     where: { id: ev.commitmentId },
   });
@@ -96,7 +114,8 @@ export async function skipOccurrence(
   const freed = { start: ev.start, end: ev.end };
   const ctx = await getCommitmentCalendarContext(commitment.userId);
 
-  // (1) Cancel: GCal delete → mirror delete → status cancelled.
+  // (1) Cancel: status is already `cancelled` (set by the atomic claim).
+  //     Tear down its GCal protected event + mirror row.
   if (ctx && ev.googleEventId) {
     await deleteCommitmentGoogleEvent(
       ctx.client,
@@ -107,10 +126,6 @@ export async function skipOccurrence(
       where: { feedId: ctx.feedId, externalEventId: ev.googleEventId },
     });
   }
-  await prisma.commitmentEvent.update({
-    where: { id: ev.id },
-    data: { status: "cancelled" },
-  });
 
   // (2) Optional temporary work block over the freed interval.
   const settings = await prisma.autoScheduleSettings.findUnique({
@@ -366,6 +381,33 @@ export async function moveOccurrence(
     await prisma.commitmentEvent.update({
       where: { id: ev.id },
       data: { start: newStart, end: newEnd, scheduledDate: newKey },
+    });
+  }
+
+  // (UAT F4) Cross-day move vacates the original recurrence slot. The move
+  // route then recomputes (scheduleAllTasksForUser → materialize); the
+  // idempotent materializer, finding no row at the old day, would back-fill a
+  // phantom occurrence there — so a "moved" session reappears at its old time.
+  // Leave a cancelled tombstone (no GCal event) at the old slot so
+  // materialize's existing cancelled-guard suppresses the back-fill — the
+  // same mechanism skip already relies on. Same-day moves keep the same key
+  // and need no tombstone.
+  if (newKey.getTime() !== oldKey.getTime()) {
+    await prisma.commitmentEvent.upsert({
+      where: {
+        commitmentId_scheduledDate: {
+          commitmentId: commitment.id,
+          scheduledDate: oldKey,
+        },
+      },
+      create: {
+        commitmentId: commitment.id,
+        scheduledDate: oldKey,
+        start: ev.start,
+        end: ev.end,
+        status: "cancelled",
+      },
+      update: { status: "cancelled" },
     });
   }
 

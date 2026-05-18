@@ -9,6 +9,7 @@ import {
   addRule,
   removeRule,
   resetRules,
+  rulesToPersist,
   updateRule,
 } from "@/lib/blockTypeMapEditor";
 import {
@@ -60,6 +61,23 @@ describe("blockTypeMapEditor helpers", () => {
     expect(next).not.toBe(DEFAULT_BLOCK_TYPE_MAP); // not the shared reference
     next.push({ emoji: "x", label: "x", eligibility: "low", daytimeOnly: false });
     expect(DEFAULT_BLOCK_TYPE_MAP).toHaveLength(8); // mutation didn't leak
+  });
+
+  it("rulesToPersist substitutes DEFAULT when the list is emptied (no persist of bare [])", () => {
+    // UAT F2: removing every rule persisted "[]", but parseBlockTypeMap("[]")
+    // re-expands to DEFAULT — displayed (8 rows) ≠ persisted ([]). Persisting
+    // the explicit defaults keeps storage == display, behaviour unchanged.
+    const persisted = rulesToPersist([]);
+    expect(persisted).toEqual(DEFAULT_BLOCK_TYPE_MAP);
+    expect(persisted).not.toBe(DEFAULT_BLOCK_TYPE_MAP); // fresh copy
+    // round-trip is now stable: stringify → parse → same rules
+    expect(parseBlockTypeMap(stringifyBlockTypeMap(persisted))).toEqual(
+      DEFAULT_BLOCK_TYPE_MAP
+    );
+  });
+
+  it("rulesToPersist passes a non-empty list through unchanged", () => {
+    expect(rulesToPersist(SAMPLE)).toBe(SAMPLE);
   });
 
   it("round-trips through parse/stringify after edits", () => {

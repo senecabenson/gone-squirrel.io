@@ -18,6 +18,7 @@ import {
   addRule,
   removeRule,
   resetRules,
+  rulesToPersist,
   updateRule,
 } from "@/lib/blockTypeMapEditor";
 import {
@@ -60,8 +61,12 @@ export function BlockTypeMapEditor({
   }, [value]);
 
   const commit = (next: BlockTypeRule[]) => {
-    setRules(next);
-    onChange(stringifyBlockTypeMap(next));
+    // Never persist a bare [] — it reads back as DEFAULT, so storage would
+    // silently diverge from what the editor shows (UAT F2). Substitute the
+    // explicit defaults so display == persisted.
+    const persisted = rulesToPersist(next);
+    setRules(persisted);
+    onChange(stringifyBlockTypeMap(persisted));
   };
 
   return (
@@ -79,7 +84,7 @@ export function BlockTypeMapEditor({
             onChange={(e) =>
               setRules(updateRule(rules, index, { emoji: e.target.value }))
             }
-            onBlur={() => onChange(stringifyBlockTypeMap(rules))}
+            onBlur={() => onChange(stringifyBlockTypeMap(rulesToPersist(rules)))}
           />
           <Input
             aria-label={`Block ${index + 1} label`}
@@ -89,7 +94,7 @@ export function BlockTypeMapEditor({
             onChange={(e) =>
               setRules(updateRule(rules, index, { label: e.target.value }))
             }
-            onBlur={() => onChange(stringifyBlockTypeMap(rules))}
+            onBlur={() => onChange(stringifyBlockTypeMap(rulesToPersist(rules)))}
           />
           <Select
             value={rule.eligibility}

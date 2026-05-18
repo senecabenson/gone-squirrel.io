@@ -498,7 +498,7 @@ export const useSettingsStore = create<SettingsStore>()(
             integrationSettings,
             dataSettings,
             autoScheduleSettings,
-            systemSettings,
+            isAdmin,
             accounts,
           ] = await Promise.all([
             fetch("/api/user-settings").then((res) => res.json()),
@@ -507,9 +507,20 @@ export const useSettingsStore = create<SettingsStore>()(
             fetch("/api/integration-settings").then((res) => res.json()),
             fetch("/api/data-settings").then((res) => res.json()),
             fetch("/api/auto-schedule-settings").then((res) => res.json()),
-            fetch("/api/system-settings").then((res) => res.json()),
+            // UAT F1: /api/system-settings is admin-only (requireAdmin). Fetch
+            // it ONLY for admins — a non-admin load otherwise fires a GET +
+            // (via updateSystemSettings) a PATCH, both 403, spraying console
+            // errors on every settings visit. check-admin is public.
+            fetch("/api/auth/check-admin")
+              .then((res) => res.json())
+              .then((j) => Boolean(j?.isAdmin))
+              .catch(() => false),
             fetch("/api/accounts").then((res) => res.json()),
           ]);
+
+          const systemSettings = isAdmin
+            ? await fetch("/api/system-settings").then((res) => res.json())
+            : null;
 
           // Set initialized flag
           set({ initialized: true, accounts });
@@ -595,17 +606,24 @@ export const useSettingsStore = create<SettingsStore>()(
             skipReflowBlockType: autoScheduleSettings.skipReflowBlockType,
           });
 
-          get().updateSystemSettings({
-            googleClientId: systemSettings.googleClientId,
-            googleClientSecret: systemSettings.googleClientSecret,
-            outlookClientId: systemSettings.outlookClientId,
-            outlookClientSecret: systemSettings.outlookClientSecret,
-            outlookTenantId: systemSettings.outlookTenantId,
-            logLevel: systemSettings.logLevel as "none" | "debug",
-            logRetention: systemSettings.logRetention,
-            logDestination: systemSettings.logDestination,
-            disableHomepage: systemSettings.disableHomepage,
-          });
+          // Only admins have system settings to hydrate. updateSystemSettings
+          // also PATCHes /api/system-settings (admin-only); calling it for a
+          // non-admin would 403. Non-admins keep the store defaults — these
+          // fields are admin-surface only; routing (disableHomepage) is
+          // enforced server-side by middleware regardless.
+          if (isAdmin && systemSettings) {
+            get().updateSystemSettings({
+              googleClientId: systemSettings.googleClientId,
+              googleClientSecret: systemSettings.googleClientSecret,
+              outlookClientId: systemSettings.outlookClientId,
+              outlookClientSecret: systemSettings.outlookClientSecret,
+              outlookTenantId: systemSettings.outlookTenantId,
+              logLevel: systemSettings.logLevel as "none" | "debug",
+              logRetention: systemSettings.logRetention,
+              logDestination: systemSettings.logDestination,
+              disableHomepage: systemSettings.disableHomepage,
+            });
+          }
         } catch (error) {
           logger.error(
             "Failed to initialize settings from database",

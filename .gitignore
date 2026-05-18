@@ -55,6 +55,9 @@ node_modules/
 /playwright/.cache/
 /.playwright-mcp/
 /logs/
+
+# UAT — committed scripts stay (/uat/*-uat.md); screenshots are ephemeral
+/uat/.screenshots/
 /blog/
 diff.txt
 data/*
